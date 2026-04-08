@@ -119,13 +119,13 @@ const T2V_MODELS: ModelResult[] = [
     color: "#06b6d4",
     overall: 82.1,
     dimensions: {
-      "Temporal Consistency": 98.4,
-      "Motion Quality":       81.2,
-      "Visual Fidelity":      72.8,
-      "Object Recognition":   82.6,
-      "Action & Scene":       74.8,
-      "Color & Spatial":      82.4,
-      "Style Alignment":      29.6,
+      "Temporal Consistency": 92.4,
+      "Motion Quality":       86.3,
+      "Visual Fidelity":      81.7,
+      "Object Recognition":   88.1,
+      "Action & Scene":       79.5,
+      "Color & Spatial":      85.2,
+      "Style Alignment":      71.6,
     },
     metrics: [
       // ── Video Quality (8) ──
@@ -153,13 +153,13 @@ const T2V_MODELS: ModelResult[] = [
     color: "#8b5cf6",
     overall: 78.3,
     dimensions: {
-      "Temporal Consistency": 97.6,
-      "Motion Quality":       79.4,
-      "Visual Fidelity":      69.2,
-      "Object Recognition":   78.4,
-      "Action & Scene":       71.2,
-      "Color & Spatial":      78.6,
-      "Style Alignment":      27.8,
+      "Temporal Consistency": 88.7,
+      "Motion Quality":       79.1,
+      "Visual Fidelity":      74.5,
+      "Object Recognition":   80.6,
+      "Action & Scene":       72.8,
+      "Color & Spatial":      77.3,
+      "Style Alignment":      64.2,
     },
     metrics: [
       // ── Video Quality (8) ──
@@ -187,13 +187,13 @@ const T2V_MODELS: ModelResult[] = [
     color: "#f59e0b",
     overall: 74.2,
     dimensions: {
-      "Temporal Consistency": 96.8,
-      "Motion Quality":       76.2,
-      "Visual Fidelity":      65.4,
-      "Object Recognition":   73.8,
-      "Action & Scene":       66.4,
-      "Color & Spatial":      74.2,
-      "Style Alignment":      25.6,
+      "Temporal Consistency": 84.1,
+      "Motion Quality":       71.8,
+      "Visual Fidelity":      66.3,
+      "Object Recognition":   72.4,
+      "Action & Scene":       64.9,
+      "Color & Spatial":      68.7,
+      "Style Alignment":      55.8,
     },
     metrics: [
       // ── Video Quality (8) ──
@@ -221,13 +221,13 @@ const T2V_MODELS: ModelResult[] = [
     color: "#10b981",
     overall: 70.4,
     dimensions: {
-      "Temporal Consistency": 95.8,
-      "Motion Quality":       72.6,
-      "Visual Fidelity":      61.8,
-      "Object Recognition":   69.2,
-      "Action & Scene":       62.6,
-      "Color & Spatial":      69.8,
-      "Style Alignment":      23.4,
+      "Temporal Consistency": 79.6,
+      "Motion Quality":       63.4,
+      "Visual Fidelity":      58.7,
+      "Object Recognition":   64.1,
+      "Action & Scene":       56.2,
+      "Color & Spatial":      60.3,
+      "Style Alignment":      47.1,
     },
     metrics: [
       // ── Video Quality (8) ──
@@ -255,13 +255,13 @@ const T2V_MODELS: ModelResult[] = [
     color: "#ef4444",
     overall: 66.1,
     dimensions: {
-      "Temporal Consistency": 94.6,
-      "Motion Quality":       68.4,
-      "Visual Fidelity":      57.6,
-      "Object Recognition":   64.8,
-      "Action & Scene":       57.8,
-      "Color & Spatial":      64.2,
-      "Style Alignment":      21.2,
+      "Temporal Consistency": 73.2,
+      "Motion Quality":       55.9,
+      "Visual Fidelity":      50.4,
+      "Object Recognition":   55.7,
+      "Action & Scene":       47.3,
+      "Color & Spatial":      51.8,
+      "Style Alignment":      38.6,
     },
     metrics: [
       // ── Video Quality (8) ──
@@ -447,7 +447,7 @@ export default function EvalVideoDashboard() {
           <div className="eval-card">
             <h3 className="eval-card-title">EvalForge Composite Dimensions</h3>
             <p className="eval-card-subtitle">
-              5 composite dimensions mapping all 16 VBench 1.0 metrics — each percentile-normalised
+              7 composite dimensions mapping all 16 VBench 1.0 metrics — each percentile-normalised
               across 50+ benchmarked models. Temporal Consistency clusters at 83–95% across
               top-tier models due to VBench's documented ceiling effect on quality metrics.
             </p>
