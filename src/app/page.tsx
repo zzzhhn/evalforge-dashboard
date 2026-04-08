@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Video, Bot, ArrowRight } from "lucide-react";
+import MermaidDiagram from "@/components/MermaidDiagram";
 
 const VIDEO_STATS = {
   models: 4,
@@ -31,6 +32,35 @@ const AGENT_STATS = {
     { name: "Translation",       value:  3.6, color: "#84cc16" },
   ],
 };
+
+const T2V_PIPELINE = [
+  "flowchart LR",
+  "    input([Prompt Dataset]):::io --> s1",
+  '    s1["Stage 1: Classify\\nLLM taxonomy · hash cache\\n7 prompt categories"] --> s2',
+  '    s2["Stage 2: Generate\\nasync · per-provider semaphore\\nN-run retry · checkpoint"] --> s3',
+  '    s3["Stage 3: Evaluate\\nVBench 1.0 · 16 metrics\\n+ VBench++ I2V dims"] --> s4',
+  '    s4["Stage 4: Analyze\\npercentile normalise\\ncross-model ranking"] --> s5',
+  '    s5["Stage 5: Report\\nJSON · DOCX · HTML"]:::out --> output([Interactive Dashboard]):::io',
+  "    providers([Model Providers\\nKling · Veo · Runway · Pika]):::ext --> s2",
+  "    vbench([VBench Evaluator\\noptional GPU server]):::ext --> s3",
+  "    classDef io fill:#6366f11a,stroke:#6366f1,color:#a5b4fc",
+  "    classDef ext fill:#10b9811a,stroke:#10b981,color:#6ee7b7",
+  "    classDef out fill:#f59e0b1a,stroke:#f59e0b,color:#fcd34d",
+].join("\n");
+
+const AGENT_PIPELINE = [
+  "flowchart LR",
+  "    input([Conversations\\n500 sessions · JSONL]):::io --> s1",
+  '    s1["Stage 1: Classify Intent\\n7 categories\\nhybrid rules + LLM"] --> s3',
+  '    s3["Stage 3: LLM Judge\\n5 dimensions\\n5-shot calibration"] --> s4',
+  '    s4["Stage 4: Aggregate\\nturn → session\\n→ intent category"] --> s5',
+  '    s5["Stage 5: Report\\nheatmaps · radar · JSON"]:::out --> output([Intent + Quality Profiles]):::io',
+  "    llm([LLM Backend\\nGemma 4 local or\\nOpenAI-compat API]):::ext --> s1",
+  "    llm --> s3",
+  "    classDef io fill:#6366f11a,stroke:#6366f1,color:#a5b4fc",
+  "    classDef ext fill:#10b9811a,stroke:#10b981,color:#6ee7b7",
+  "    classDef out fill:#f59e0b1a,stroke:#f59e0b,color:#fcd34d",
+].join("\n");
 
 function MiniRadar({ points }: { points: typeof VIDEO_STATS.radarPoints }) {
   const cx = 60;
@@ -142,6 +172,33 @@ export default function HomePage() {
           </p>
           <MiniDonut points={AGENT_STATS.piePoints} />
         </Link>
+      </section>
+
+      {/* Pipeline Architecture */}
+      <section className="mb-16">
+        <h2 className="mb-6 text-2xl font-bold text-[var(--text-primary)]">
+          Pipeline Architecture
+        </h2>
+        <div className="grid gap-6 lg:grid-cols-2">
+          <div className="glass-card p-6">
+            <h3 className="mb-4 text-lg font-semibold text-[var(--accent-cyan)]">
+              T2V Evaluation Track
+            </h3>
+            <MermaidDiagram
+              chart={T2V_PIPELINE}
+              caption="EvalForge T2V track — text-to-video evaluation pipeline"
+            />
+          </div>
+          <div className="glass-card p-6">
+            <h3 className="mb-4 text-lg font-semibold" style={{ color: "#a78bfa" }}>
+              Agent Evaluation Track
+            </h3>
+            <MermaidDiagram
+              chart={AGENT_PIPELINE}
+              caption="EvalForge Agent track — Stage 2 (Generation) is skipped when conversations are pre-collected"
+            />
+          </div>
+        </div>
       </section>
 
       {/* Key Highlights */}
