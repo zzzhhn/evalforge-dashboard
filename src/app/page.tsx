@@ -1,87 +1,109 @@
-import { promises as fs } from "fs";
-import path from "path";
 import Link from "next/link";
 import { Video, Bot, ArrowRight } from "lucide-react";
-import { StatCard } from "@/components/StatCard";
-import MiniRadarPreview from "./MiniRadarPreview";
-import MiniPiePreview from "./MiniPiePreview";
 
-interface VideoMetric {
-  mean: number;
-  std: number;
-  baseline: number;
-  delta: number;
-}
+const VIDEO_STATS = {
+  models: 4,
+  dims: 16,
+  prompts: 200,
+  bestModel: "Kling 2.0",
+  bestScore: "77.8",
+  radarPoints: [
+    { metric: "TC", value: 95 },
+    { metric: "MQ", value: 78 },
+    { metric: "VQ", value: 75 },
+    { metric: "SA", value: 73 },
+    { metric: "TA", value: 67 },
+  ],
+};
 
-interface VideoModel {
-  name: string;
-  overall_score: number;
-  grade: string;
-  metrics: Record<string, VideoMetric>;
-}
+const AGENT_STATS = {
+  conversations: 500,
+  turns: 3600,
+  intents: 7,
+  avgQuality: "86.3",
+  piePoints: [
+    { name: "Information Query", value: 28.4, color: "#6366f1" },
+    { name: "Task Execution",    value: 19.6, color: "#10b981" },
+    { name: "Code Generation",   value: 16.6, color: "#ec4899" },
+    { name: "Creative Writing",  value: 13.4, color: "#f59e0b" },
+    { name: "Analysis",          value: 10.8, color: "#8b5cf6" },
+    { name: "Conversation",      value:  7.6, color: "#06b6d4" },
+    { name: "Translation",       value:  3.6, color: "#84cc16" },
+  ],
+};
 
-interface VideoData {
-  metadata: { total_prompts: number };
-  models: VideoModel[];
-}
-
-interface IntentEntry {
-  count: number;
-  percentage: number;
-}
-
-interface AgentData {
-  metadata: { total_conversations: number; total_turns: number };
-  intent_distribution: Record<string, IntentEntry>;
-  quality_scores: { overall: Record<string, number> };
-}
-
-async function loadData() {
-  const videoPath = path.join(process.cwd(), "public/data/video_results.json");
-  const agentPath = path.join(process.cwd(), "public/data/agent_results.json");
-  const [videoRaw, agentRaw] = await Promise.all([
-    fs.readFile(videoPath, "utf-8"),
-    fs.readFile(agentPath, "utf-8"),
-  ]);
-  return {
-    video: JSON.parse(videoRaw) as VideoData,
-    agent: JSON.parse(agentRaw) as AgentData,
-  };
-}
-
-export default async function HomePage() {
-  const { video, agent } = await loadData();
-
-  const sortedModels = [...video.models].sort(
-    (a, b) => b.overall_score - a.overall_score
+function MiniRadar({ points }: { points: typeof VIDEO_STATS.radarPoints }) {
+  const cx = 60;
+  const cy = 60;
+  const r = 45;
+  const n = points.length;
+  const pts = points.map((p, i) => {
+    const angle = (Math.PI * 2 * i) / n - Math.PI / 2;
+    const scaled = (p.value / 100) * r;
+    return [cx + scaled * Math.cos(angle), cy + scaled * Math.sin(angle)];
+  });
+  const d = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ") + "Z";
+  const gridDs = [0.25, 0.5, 0.75, 1].map((frac) => {
+    const gPts = points.map((_, i) => {
+      const angle = (Math.PI * 2 * i) / n - Math.PI / 2;
+      const gr = frac * r;
+      return [cx + gr * Math.cos(angle), cy + gr * Math.sin(angle)];
+    });
+    return gPts.map((p, i) => `${i === 0 ? "M" : "L"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ") + "Z";
+  });
+  return (
+    <svg width="120" height="120" viewBox="0 0 120 120" style={{ display: "block", margin: "16px auto 0" }}>
+      {gridDs.map((gd, i) => (
+        <path key={i} d={gd} fill="none" stroke="rgba(148,163,184,0.12)" strokeWidth="1" />
+      ))}
+      <path d={d} fill="rgba(56,189,248,0.2)" stroke="#38bdf8" strokeWidth="1.5" />
+    </svg>
   );
-  const bestModel = sortedModels[0];
+}
 
-  const qualityValues = Object.values(agent.quality_scores.overall);
-  const avgQuality =
-    qualityValues.reduce((sum, v) => sum + v, 0) / qualityValues.length;
-
-  const intentCount = Object.keys(agent.intent_distribution).length;
-
-  const radarPreviewData = Object.entries(bestModel.metrics)
-    .slice(0, 9)
-    .map(([key, val]) => ({
-      metric: key.split("_").map((w) => w[0].toUpperCase()).join(""),
-      value: val.mean * 100,
-    }));
-
-  const piePreviewData = Object.entries(agent.intent_distribution).map(
-    ([key, val]) => ({ name: key, value: val.percentage })
+function MiniDonut({ points }: { points: typeof AGENT_STATS.piePoints }) {
+  const cx = 60;
+  const cy = 60;
+  const r = 42;
+  const ri = 24;
+  const total = points.reduce((s, p) => s + p.value, 0);
+  let angle = -Math.PI / 2;
+  const slices = points.map((p) => {
+    const start = angle;
+    const sweep = (p.value / total) * Math.PI * 2;
+    angle += sweep;
+    const x1 = cx + r * Math.cos(start);
+    const y1 = cy + r * Math.sin(start);
+    const x2 = cx + r * Math.cos(start + sweep);
+    const y2 = cy + r * Math.sin(start + sweep);
+    const xi1 = cx + ri * Math.cos(start);
+    const yi1 = cy + ri * Math.sin(start);
+    const xi2 = cx + ri * Math.cos(start + sweep);
+    const yi2 = cy + ri * Math.sin(start + sweep);
+    const large = sweep > Math.PI ? 1 : 0;
+    return {
+      d: `M${x1.toFixed(1)},${y1.toFixed(1)} A${r},${r} 0 ${large},1 ${x2.toFixed(1)},${y2.toFixed(1)} L${xi2.toFixed(1)},${yi2.toFixed(1)} A${ri},${ri} 0 ${large},0 ${xi1.toFixed(1)},${yi1.toFixed(1)} Z`,
+      color: p.color,
+    };
+  });
+  return (
+    <svg width="120" height="120" viewBox="0 0 120 120" style={{ display: "block", margin: "16px auto 0" }}>
+      {slices.map((s, i) => (
+        <path key={i} d={s.d} fill={s.color} fillOpacity="0.85" />
+      ))}
+    </svg>
   );
+}
 
+export default function HomePage() {
   return (
     <div className="mx-auto max-w-7xl px-6 py-12">
       {/* Hero */}
       <section className="mb-16 text-center">
-        <h1 className="text-5xl font-extrabold tracking-tight text-text-primary">
+        <h1 className="text-5xl font-extrabold tracking-tight text-[var(--text-primary)]">
           EvalForge Dashboard
         </h1>
-        <p className="mx-auto mt-4 max-w-2xl text-lg text-text-secondary">
+        <p className="mx-auto mt-4 max-w-2xl text-lg text-[var(--text-secondary)]">
           Unified evaluation results for generative video models and
           conversational agents
         </p>
@@ -91,68 +113,55 @@ export default async function HomePage() {
       <section className="mb-16 grid gap-6 md:grid-cols-2">
         <Link
           href="/video"
-          className="group glass-card p-6 transition-all hover:border-accent-cyan/40 hover:shadow-lg hover:shadow-accent-cyan/5"
+          className="group glass-card p-6 transition-all hover:border-[rgba(56,189,248,0.4)] hover:shadow-lg"
         >
-          <div className="flex items-center gap-3 text-accent-cyan">
+          <div className="flex items-center gap-3 text-[var(--accent-cyan)]">
             <Video className="h-6 w-6" />
             <h2 className="text-xl font-bold">Video Track</h2>
             <ArrowRight className="ml-auto h-5 w-5 opacity-0 transition-opacity group-hover:opacity-100" />
           </div>
-          <p className="mt-2 text-sm text-text-secondary">
-            {video.models.length} models &middot; 9 metrics &middot;{" "}
-            {video.metadata.total_prompts} prompts
+          <p className="mt-2 text-sm text-[var(--text-secondary)]">
+            {VIDEO_STATS.models} models &middot; {VIDEO_STATS.dims} VBench dims &middot;{" "}
+            {VIDEO_STATS.prompts} prompts
           </p>
-          <MiniRadarPreview data={radarPreviewData} />
+          <MiniRadar points={VIDEO_STATS.radarPoints} />
         </Link>
 
         <Link
           href="/agent"
-          className="group glass-card p-6 transition-all hover:border-violet-500/40 hover:shadow-lg hover:shadow-violet-500/5"
+          className="group glass-card p-6 transition-all hover:border-[rgba(139,92,246,0.4)] hover:shadow-lg"
         >
-          <div className="flex items-center gap-3 text-violet-400">
+          <div className="flex items-center gap-3 text-[var(--accent-blue)]" style={{ color: "#a78bfa" }}>
             <Bot className="h-6 w-6" />
             <h2 className="text-xl font-bold">Agent Track</h2>
             <ArrowRight className="ml-auto h-5 w-5 opacity-0 transition-opacity group-hover:opacity-100" />
           </div>
-          <p className="mt-2 text-sm text-text-secondary">
-            {agent.metadata.total_conversations} conversations &middot;{" "}
-            {agent.metadata.total_turns} turns &middot; {intentCount} intent
-            categories
+          <p className="mt-2 text-sm text-[var(--text-secondary)]">
+            {AGENT_STATS.conversations} conversations &middot;{" "}
+            {AGENT_STATS.turns} turns &middot; {AGENT_STATS.intents} intent categories
           </p>
-          <MiniPiePreview data={piePreviewData} />
+          <MiniDonut points={AGENT_STATS.piePoints} />
         </Link>
       </section>
 
       {/* Key Highlights */}
       <section>
-        <h2 className="mb-6 text-2xl font-bold text-text-primary">
+        <h2 className="mb-6 text-2xl font-bold text-[var(--text-primary)]">
           Key Highlights
         </h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard
-            label="Total Models Evaluated"
-            value={video.models.length}
-            subtitle="Generative video models"
-            accentColor="text-accent-cyan"
-          />
-          <StatCard
-            label="Total Prompts"
-            value={video.metadata.total_prompts}
-            subtitle="Across all categories"
-            accentColor="text-violet-400"
-          />
-          <StatCard
-            label="Avg Quality Score"
-            value={`${(avgQuality * 100).toFixed(1)}%`}
-            subtitle="Agent response quality"
-            accentColor="text-accent-emerald"
-          />
-          <StatCard
-            label="Best Performer"
-            value={bestModel.name}
-            subtitle={`Overall: ${(bestModel.overall_score * 100).toFixed(1)}%`}
-            accentColor="text-accent-amber"
-          />
+          {[
+            { label: "T2V Models Evaluated", value: String(VIDEO_STATS.models), sub: "VBench 1.0 · all 16 dims", color: "var(--accent-cyan)" },
+            { label: "VBench Dimensions", value: String(VIDEO_STATS.dims), sub: "Video Quality + Condition Consistency", color: "#a78bfa" },
+            { label: "Avg Agent Quality", value: `${AGENT_STATS.avgQuality}%`, sub: "5-dim LLM-as-judge · 5-shot", color: "var(--accent-emerald)" },
+            { label: "Best T2V Performer", value: VIDEO_STATS.bestModel, sub: `EvalForge composite ${VIDEO_STATS.bestScore}`, color: "var(--accent-amber)" },
+          ].map((card) => (
+            <div key={card.label} className="glass-card p-5">
+              <p className="text-sm text-[var(--text-muted)]">{card.label}</p>
+              <p className="mt-1 text-2xl font-bold" style={{ color: card.color }}>{card.value}</p>
+              <p className="mt-1 text-xs text-[var(--text-muted)]">{card.sub}</p>
+            </div>
+          ))}
         </div>
       </section>
     </div>
