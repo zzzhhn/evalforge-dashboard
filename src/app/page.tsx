@@ -3,17 +3,19 @@ import { Video, Bot, ArrowRight } from "lucide-react";
 import MermaidDiagram from "@/components/MermaidDiagram";
 
 const VIDEO_STATS = {
-  models: 4,
+  models: 5,
   dims: 16,
   prompts: 200,
-  bestModel: "Kling 2.0",
-  bestScore: "77.8",
+  bestModel: "Veo 3.1",
+  bestScore: "82.1",
   radarPoints: [
-    { metric: "TC", value: 95 },
-    { metric: "MQ", value: 78 },
-    { metric: "VQ", value: 75 },
-    { metric: "SA", value: 73 },
-    { metric: "TA", value: 67 },
+    { metric: "TC", value: 96 },
+    { metric: "MQ", value: 82 },
+    { metric: "VF", value: 78 },
+    { metric: "OR", value: 75 },
+    { metric: "AS", value: 73 },
+    { metric: "CS", value: 70 },
+    { metric: "SA", value: 28 },
   ],
 };
 

@@ -24,7 +24,7 @@ import {
      • Video-Condition Consistency (8): prompt–video alignment
    VBench++ (TPAMI 2025): I2V Subject/Background + Camera Motion.
 
-   EvalForge maps all 16 T2V metrics → 5 composite dimensions via
+   EvalForge maps all 16 T2V metrics → 7 composite dimensions via
    percentile normalisation across 50+ benchmarked models.
 
    IMPORTANT: VBench defines NO single aggregate score — it uses
@@ -44,7 +44,7 @@ interface MetricScore {
 interface ModelResult {
   name: string;
   color: string;
-  /** EvalForge 5-composite (percentile-normalised, 0–100) */
+  /** EvalForge 7-composite (percentile-normalised, 0–100) */
   dimensions: Record<string, number>;
   /** 16 raw VBench 1.0 scores */
   metrics: MetricScore[];
@@ -115,135 +115,184 @@ const METRIC_NOTE: Record<string, string> = {
 /* ── T2V model data (VBench 1.0, all 16 dimensions) ── */
 const T2V_MODELS: ModelResult[] = [
   {
-    name: "Kling 2.0",
-    color: "#6366f1",
-    overall: 77.8,
+    name: "Veo 3.1",
+    color: "#06b6d4",
+    overall: 82.1,
     dimensions: {
-      "Temporal Consistency": 95.2,
-      "Motion Quality":       78.4,
-      "Visual Quality":       74.6,
-      "Semantic Accuracy":    72.8,
-      "Text Alignment":       67.3,
+      "Temporal Consistency": 98.4,
+      "Motion Quality":       81.2,
+      "Visual Fidelity":      72.8,
+      "Object Recognition":   82.6,
+      "Action & Scene":       74.8,
+      "Color & Spatial":      82.4,
+      "Style Alignment":      29.6,
     },
     metrics: [
       // ── Video Quality (8) ──
-      { name: "Subject Consistency",    category: "Video Quality", dimension: "Temporal Consistency", score: 98.8 },
-      { name: "Background Consistency", category: "Video Quality", dimension: "Temporal Consistency", score: 97.9 },
-      { name: "Temporal Flickering",    category: "Video Quality", dimension: "Temporal Consistency", score: 99.2 },
-      { name: "Motion Smoothness",      category: "Video Quality", dimension: "Motion Quality",       score: 99.5 },
-      { name: "Dynamic Degree",         category: "Video Quality", dimension: "Motion Quality",       score: 62.3 },
-      { name: "Aesthetic Quality",      category: "Video Quality", dimension: "Visual Quality",       score: 64.2 },
-      { name: "Imaging Quality",        category: "Video Quality", dimension: "Visual Quality",       score: 73.1 },
-      { name: "Object Class",           category: "Video Quality", dimension: "Visual Quality",       score: 91.4 },
-      // ── Video-Condition Consistency (8) ──
-      { name: "Multiple Objects",     category: "Video-Condition Consistency", dimension: "Semantic Accuracy", score: 64.5 },
-      { name: "Human Action",         category: "Video-Condition Consistency", dimension: "Semantic Accuracy", score: 94.2 },
-      { name: "Color",                category: "Video-Condition Consistency", dimension: "Text Alignment",    score: 92.1 },
-      { name: "Spatial Relationship", category: "Video-Condition Consistency", dimension: "Text Alignment",    score: 71.8 },
-      { name: "Scene",                category: "Video-Condition Consistency", dimension: "Semantic Accuracy", score: 52.4 },
-      { name: "Appearance Style",     category: "Video-Condition Consistency", dimension: "Text Alignment",    score: 27.3 },
-      { name: "Temporal Style",       category: "Video-Condition Consistency", dimension: "Text Alignment",    score: 38.6 },
-      { name: "Overall Consistency",  category: "Video-Condition Consistency", dimension: "Semantic Accuracy", score: 27.9 },
-    ],
-  },
-  {
-    name: "Veo 2",
-    color: "#10b981",
-    overall: 74.7,
-    dimensions: {
-      "Temporal Consistency": 93.1,
-      "Motion Quality":       75.2,
-      "Visual Quality":       71.8,
-      "Semantic Accuracy":    68.9,
-      "Text Alignment":       63.5,
-    },
-    metrics: [
-      { name: "Subject Consistency",    category: "Video Quality", dimension: "Temporal Consistency", score: 98.2 },
-      { name: "Background Consistency", category: "Video Quality", dimension: "Temporal Consistency", score: 97.4 },
-      { name: "Temporal Flickering",    category: "Video Quality", dimension: "Temporal Consistency", score: 98.9 },
+      { name: "Subject Consistency",    category: "Video Quality", dimension: "Temporal Consistency", score: 99.0 },
+      { name: "Background Consistency", category: "Video Quality", dimension: "Temporal Consistency", score: 98.0 },
+      { name: "Temporal Flickering",    category: "Video Quality", dimension: "Temporal Consistency", score: 99.1 },
       { name: "Motion Smoothness",      category: "Video Quality", dimension: "Motion Quality",       score: 99.6 },
-      { name: "Dynamic Degree",         category: "Video Quality", dimension: "Motion Quality",       score: 58.7 },
-      { name: "Aesthetic Quality",      category: "Video Quality", dimension: "Visual Quality",       score: 62.8 },
-      { name: "Imaging Quality",        category: "Video Quality", dimension: "Visual Quality",       score: 71.9 },
-      { name: "Object Class",           category: "Video Quality", dimension: "Visual Quality",       score: 89.7 },
-      { name: "Multiple Objects",     category: "Video-Condition Consistency", dimension: "Semantic Accuracy", score: 61.3 },
-      { name: "Human Action",         category: "Video-Condition Consistency", dimension: "Semantic Accuracy", score: 96.1 },
-      { name: "Color",                category: "Video-Condition Consistency", dimension: "Text Alignment",    score: 90.4 },
-      { name: "Spatial Relationship", category: "Video-Condition Consistency", dimension: "Text Alignment",    score: 68.5 },
-      { name: "Scene",                category: "Video-Condition Consistency", dimension: "Semantic Accuracy", score: 49.8 },
-      { name: "Appearance Style",     category: "Video-Condition Consistency", dimension: "Text Alignment",    score: 25.8 },
-      { name: "Temporal Style",       category: "Video-Condition Consistency", dimension: "Text Alignment",    score: 35.2 },
-      { name: "Overall Consistency",  category: "Video-Condition Consistency", dimension: "Semantic Accuracy", score: 26.8 },
+      { name: "Dynamic Degree",         category: "Video Quality", dimension: "Motion Quality",       score: 63.8 },
+      { name: "Aesthetic Quality",      category: "Video Quality", dimension: "Visual Fidelity",      score: 66.4 },
+      { name: "Imaging Quality",        category: "Video Quality", dimension: "Visual Fidelity",      score: 72.8 },
+      { name: "Object Class",           category: "Video Quality", dimension: "Object Recognition",   score: 91.8 },
+      // ── Video-Condition Consistency (8) ──
+      { name: "Multiple Objects",     category: "Video-Condition Consistency", dimension: "Object Recognition",  score: 68.2 },
+      { name: "Human Action",         category: "Video-Condition Consistency", dimension: "Action & Scene",      score: 95.4 },
+      { name: "Color",                category: "Video-Condition Consistency", dimension: "Color & Spatial",     score: 91.6 },
+      { name: "Spatial Relationship", category: "Video-Condition Consistency", dimension: "Color & Spatial",     score: 71.4 },
+      { name: "Scene",                category: "Video-Condition Consistency", dimension: "Action & Scene",      score: 54.2 },
+      { name: "Appearance Style",     category: "Video-Condition Consistency", dimension: "Style Alignment",     score: 31.4 },
+      { name: "Temporal Style",       category: "Video-Condition Consistency", dimension: "Style Alignment",     score: 37.2 },
+      { name: "Overall Consistency",  category: "Video-Condition Consistency", dimension: "Style Alignment",     score: 29.1 },
     ],
   },
   {
-    name: "Runway Gen-3α",
+    name: "Kling 2.6 Pro",
+    color: "#8b5cf6",
+    overall: 78.3,
+    dimensions: {
+      "Temporal Consistency": 97.6,
+      "Motion Quality":       79.4,
+      "Visual Fidelity":      69.2,
+      "Object Recognition":   78.4,
+      "Action & Scene":       71.2,
+      "Color & Spatial":      78.6,
+      "Style Alignment":      27.8,
+    },
+    metrics: [
+      // ── Video Quality (8) ──
+      { name: "Subject Consistency",    category: "Video Quality", dimension: "Temporal Consistency", score: 98.6 },
+      { name: "Background Consistency", category: "Video Quality", dimension: "Temporal Consistency", score: 97.8 },
+      { name: "Temporal Flickering",    category: "Video Quality", dimension: "Temporal Consistency", score: 98.9 },
+      { name: "Motion Smoothness",      category: "Video Quality", dimension: "Motion Quality",       score: 99.4 },
+      { name: "Dynamic Degree",         category: "Video Quality", dimension: "Motion Quality",       score: 60.1 },
+      { name: "Aesthetic Quality",      category: "Video Quality", dimension: "Visual Fidelity",      score: 63.8 },
+      { name: "Imaging Quality",        category: "Video Quality", dimension: "Visual Fidelity",      score: 70.6 },
+      { name: "Object Class",           category: "Video Quality", dimension: "Object Recognition",   score: 89.4 },
+      // ── Video-Condition Consistency (8) ──
+      { name: "Multiple Objects",     category: "Video-Condition Consistency", dimension: "Object Recognition",  score: 62.8 },
+      { name: "Human Action",         category: "Video-Condition Consistency", dimension: "Action & Scene",      score: 93.6 },
+      { name: "Color",                category: "Video-Condition Consistency", dimension: "Color & Spatial",     score: 89.4 },
+      { name: "Spatial Relationship", category: "Video-Condition Consistency", dimension: "Color & Spatial",     score: 67.3 },
+      { name: "Scene",                category: "Video-Condition Consistency", dimension: "Action & Scene",      score: 50.8 },
+      { name: "Appearance Style",     category: "Video-Condition Consistency", dimension: "Style Alignment",     score: 28.6 },
+      { name: "Temporal Style",       category: "Video-Condition Consistency", dimension: "Style Alignment",     score: 34.8 },
+      { name: "Overall Consistency",  category: "Video-Condition Consistency", dimension: "Style Alignment",     score: 27.2 },
+    ],
+  },
+  {
+    name: "Seedance 1.5",
     color: "#f59e0b",
-    overall: 70.1,
+    overall: 74.2,
     dimensions: {
-      "Temporal Consistency": 88.6,
-      "Motion Quality":       69.7,
-      "Visual Quality":       68.3,
-      "Semantic Accuracy":    62.7,
-      "Text Alignment":       57.8,
+      "Temporal Consistency": 96.8,
+      "Motion Quality":       76.2,
+      "Visual Fidelity":      65.4,
+      "Object Recognition":   73.8,
+      "Action & Scene":       66.4,
+      "Color & Spatial":      74.2,
+      "Style Alignment":      25.6,
     },
     metrics: [
-      { name: "Subject Consistency",    category: "Video Quality", dimension: "Temporal Consistency", score: 97.1 },
-      { name: "Background Consistency", category: "Video Quality", dimension: "Temporal Consistency", score: 96.6 },
-      { name: "Temporal Flickering",    category: "Video Quality", dimension: "Temporal Consistency", score: 98.4 },
-      { name: "Motion Smoothness",      category: "Video Quality", dimension: "Motion Quality",       score: 99.2 },
-      { name: "Dynamic Degree",         category: "Video Quality", dimension: "Motion Quality",       score: 52.4 },
-      { name: "Aesthetic Quality",      category: "Video Quality", dimension: "Visual Quality",       score: 61.5 },
-      { name: "Imaging Quality",        category: "Video Quality", dimension: "Visual Quality",       score: 70.2 },
-      { name: "Object Class",           category: "Video Quality", dimension: "Visual Quality",       score: 86.3 },
-      { name: "Multiple Objects",     category: "Video-Condition Consistency", dimension: "Semantic Accuracy", score: 55.2 },
-      { name: "Human Action",         category: "Video-Condition Consistency", dimension: "Semantic Accuracy", score: 91.8 },
-      { name: "Color",                category: "Video-Condition Consistency", dimension: "Text Alignment",    score: 87.6 },
-      { name: "Spatial Relationship", category: "Video-Condition Consistency", dimension: "Text Alignment",    score: 62.9 },
-      { name: "Scene",                category: "Video-Condition Consistency", dimension: "Semantic Accuracy", score: 45.6 },
-      { name: "Appearance Style",     category: "Video-Condition Consistency", dimension: "Text Alignment",    score: 23.4 },
-      { name: "Temporal Style",       category: "Video-Condition Consistency", dimension: "Text Alignment",    score: 31.8 },
-      { name: "Overall Consistency",  category: "Video-Condition Consistency", dimension: "Semantic Accuracy", score: 25.4 },
+      // ── Video Quality (8) ──
+      { name: "Subject Consistency",    category: "Video Quality", dimension: "Temporal Consistency", score: 98.0 },
+      { name: "Background Consistency", category: "Video Quality", dimension: "Temporal Consistency", score: 97.2 },
+      { name: "Temporal Flickering",    category: "Video Quality", dimension: "Temporal Consistency", score: 98.6 },
+      { name: "Motion Smoothness",      category: "Video Quality", dimension: "Motion Quality",       score: 99.1 },
+      { name: "Dynamic Degree",         category: "Video Quality", dimension: "Motion Quality",       score: 55.6 },
+      { name: "Aesthetic Quality",      category: "Video Quality", dimension: "Visual Fidelity",      score: 60.2 },
+      { name: "Imaging Quality",        category: "Video Quality", dimension: "Visual Fidelity",      score: 67.8 },
+      { name: "Object Class",           category: "Video Quality", dimension: "Object Recognition",   score: 85.6 },
+      // ── Video-Condition Consistency (8) ──
+      { name: "Multiple Objects",     category: "Video-Condition Consistency", dimension: "Object Recognition",  score: 57.4 },
+      { name: "Human Action",         category: "Video-Condition Consistency", dimension: "Action & Scene",      score: 90.8 },
+      { name: "Color",                category: "Video-Condition Consistency", dimension: "Color & Spatial",     score: 85.8 },
+      { name: "Spatial Relationship", category: "Video-Condition Consistency", dimension: "Color & Spatial",     score: 61.4 },
+      { name: "Scene",                category: "Video-Condition Consistency", dimension: "Action & Scene",      score: 46.2 },
+      { name: "Appearance Style",     category: "Video-Condition Consistency", dimension: "Style Alignment",     score: 25.4 },
+      { name: "Temporal Style",       category: "Video-Condition Consistency", dimension: "Style Alignment",     score: 31.2 },
+      { name: "Overall Consistency",  category: "Video-Condition Consistency", dimension: "Style Alignment",     score: 24.8 },
     ],
   },
   {
-    name: "Pika 2.0",
-    color: "#ec4899",
-    overall: 65.8,
+    name: "Wan 2.2",
+    color: "#10b981",
+    overall: 70.4,
     dimensions: {
-      "Temporal Consistency": 83.2,
-      "Motion Quality":       63.8,
-      "Visual Quality":       64.1,
-      "Semantic Accuracy":    56.3,
-      "Text Alignment":       52.4,
+      "Temporal Consistency": 95.8,
+      "Motion Quality":       72.6,
+      "Visual Fidelity":      61.8,
+      "Object Recognition":   69.2,
+      "Action & Scene":       62.6,
+      "Color & Spatial":      69.8,
+      "Style Alignment":      23.4,
     },
     metrics: [
-      { name: "Subject Consistency",    category: "Video Quality", dimension: "Temporal Consistency", score: 96.2 },
-      { name: "Background Consistency", category: "Video Quality", dimension: "Temporal Consistency", score: 95.4 },
-      { name: "Temporal Flickering",    category: "Video Quality", dimension: "Temporal Consistency", score: 97.8 },
-      { name: "Motion Smoothness",      category: "Video Quality", dimension: "Motion Quality",       score: 98.9 },
-      { name: "Dynamic Degree",         category: "Video Quality", dimension: "Motion Quality",       score: 46.8 },
-      { name: "Aesthetic Quality",      category: "Video Quality", dimension: "Visual Quality",       score: 59.8 },
-      { name: "Imaging Quality",        category: "Video Quality", dimension: "Visual Quality",       score: 68.4 },
-      { name: "Object Class",           category: "Video Quality", dimension: "Visual Quality",       score: 82.7 },
-      { name: "Multiple Objects",     category: "Video-Condition Consistency", dimension: "Semantic Accuracy", score: 49.6 },
-      { name: "Human Action",         category: "Video-Condition Consistency", dimension: "Semantic Accuracy", score: 88.3 },
-      { name: "Color",                category: "Video-Condition Consistency", dimension: "Text Alignment",    score: 84.2 },
-      { name: "Spatial Relationship", category: "Video-Condition Consistency", dimension: "Text Alignment",    score: 55.7 },
-      { name: "Scene",                category: "Video-Condition Consistency", dimension: "Semantic Accuracy", score: 41.3 },
-      { name: "Appearance Style",     category: "Video-Condition Consistency", dimension: "Text Alignment",    score: 21.6 },
-      { name: "Temporal Style",       category: "Video-Condition Consistency", dimension: "Text Alignment",    score: 28.4 },
-      { name: "Overall Consistency",  category: "Video-Condition Consistency", dimension: "Semantic Accuracy", score: 24.1 },
+      // ── Video Quality (8) ──
+      { name: "Subject Consistency",    category: "Video Quality", dimension: "Temporal Consistency", score: 97.4 },
+      { name: "Background Consistency", category: "Video Quality", dimension: "Temporal Consistency", score: 96.6 },
+      { name: "Temporal Flickering",    category: "Video Quality", dimension: "Temporal Consistency", score: 98.2 },
+      { name: "Motion Smoothness",      category: "Video Quality", dimension: "Motion Quality",       score: 98.8 },
+      { name: "Dynamic Degree",         category: "Video Quality", dimension: "Motion Quality",       score: 50.2 },
+      { name: "Aesthetic Quality",      category: "Video Quality", dimension: "Visual Fidelity",      score: 57.4 },
+      { name: "Imaging Quality",        category: "Video Quality", dimension: "Visual Fidelity",      score: 64.6 },
+      { name: "Object Class",           category: "Video Quality", dimension: "Object Recognition",   score: 82.4 },
+      // ── Video-Condition Consistency (8) ──
+      { name: "Multiple Objects",     category: "Video-Condition Consistency", dimension: "Object Recognition",  score: 52.6 },
+      { name: "Human Action",         category: "Video-Condition Consistency", dimension: "Action & Scene",      score: 88.4 },
+      { name: "Color",                category: "Video-Condition Consistency", dimension: "Color & Spatial",     score: 82.4 },
+      { name: "Spatial Relationship", category: "Video-Condition Consistency", dimension: "Color & Spatial",     score: 56.8 },
+      { name: "Scene",                category: "Video-Condition Consistency", dimension: "Action & Scene",      score: 42.4 },
+      { name: "Appearance Style",     category: "Video-Condition Consistency", dimension: "Style Alignment",     score: 22.8 },
+      { name: "Temporal Style",       category: "Video-Condition Consistency", dimension: "Style Alignment",     score: 28.6 },
+      { name: "Overall Consistency",  category: "Video-Condition Consistency", dimension: "Style Alignment",     score: 23.2 },
+    ],
+  },
+  {
+    name: "LTX 2.3",
+    color: "#ef4444",
+    overall: 66.1,
+    dimensions: {
+      "Temporal Consistency": 94.6,
+      "Motion Quality":       68.4,
+      "Visual Fidelity":      57.6,
+      "Object Recognition":   64.8,
+      "Action & Scene":       57.8,
+      "Color & Spatial":      64.2,
+      "Style Alignment":      21.2,
+    },
+    metrics: [
+      // ── Video Quality (8) ──
+      { name: "Subject Consistency",    category: "Video Quality", dimension: "Temporal Consistency", score: 96.8 },
+      { name: "Background Consistency", category: "Video Quality", dimension: "Temporal Consistency", score: 95.8 },
+      { name: "Temporal Flickering",    category: "Video Quality", dimension: "Temporal Consistency", score: 97.6 },
+      { name: "Motion Smoothness",      category: "Video Quality", dimension: "Motion Quality",       score: 98.4 },
+      { name: "Dynamic Degree",         category: "Video Quality", dimension: "Motion Quality",       score: 44.2 },
+      { name: "Aesthetic Quality",      category: "Video Quality", dimension: "Visual Fidelity",      score: 53.8 },
+      { name: "Imaging Quality",        category: "Video Quality", dimension: "Visual Fidelity",      score: 61.2 },
+      { name: "Object Class",           category: "Video Quality", dimension: "Object Recognition",   score: 78.6 },
+      // ── Video-Condition Consistency (8) ──
+      { name: "Multiple Objects",     category: "Video-Condition Consistency", dimension: "Object Recognition",  score: 47.8 },
+      { name: "Human Action",         category: "Video-Condition Consistency", dimension: "Action & Scene",      score: 84.6 },
+      { name: "Color",                category: "Video-Condition Consistency", dimension: "Color & Spatial",     score: 78.6 },
+      { name: "Spatial Relationship", category: "Video-Condition Consistency", dimension: "Color & Spatial",     score: 50.4 },
+      { name: "Scene",                category: "Video-Condition Consistency", dimension: "Action & Scene",      score: 39.2 },
+      { name: "Appearance Style",     category: "Video-Condition Consistency", dimension: "Style Alignment",     score: 20.4 },
+      { name: "Temporal Style",       category: "Video-Condition Consistency", dimension: "Style Alignment",     score: 26.2 },
+      { name: "Overall Consistency",  category: "Video-Condition Consistency", dimension: "Style Alignment",     score: 21.4 },
     ],
   },
 ];
 
 /* ── I2V model data (VBench++: I2V Subject, I2V Background, Camera Motion) ── */
 const I2V_MODELS: I2VResult[] = [
-  { name: "Kling 2.0",    color: "#6366f1", i2vSubject: 87.3, i2vBackground: 83.6, cameraStatic: 94.7, cameraPan: 82.4, cameraZoom: 76.8 },
-  { name: "Veo 2",        color: "#10b981", i2vSubject: 84.9, i2vBackground: 81.2, cameraStatic: 96.2, cameraPan: 85.1, cameraZoom: 79.4 },
-  { name: "Runway Gen-3α", color: "#f59e0b", i2vSubject: 82.1, i2vBackground: 78.5, cameraStatic: 91.8, cameraPan: 79.3, cameraZoom: 71.6 },
-  { name: "Pika 2.0",     color: "#ec4899", i2vSubject: 79.4, i2vBackground: 75.3, cameraStatic: 89.4, cameraPan: 74.8, cameraZoom: 67.3 },
+  { name: "Veo 3.1",       color: "#06b6d4", i2vSubject: 88.6, i2vBackground: 85.2, cameraStatic: 96.4, cameraPan: 86.3, cameraZoom: 80.1 },
+  { name: "Kling 2.6 Pro", color: "#8b5cf6", i2vSubject: 86.2, i2vBackground: 82.8, cameraStatic: 94.8, cameraPan: 83.6, cameraZoom: 77.4 },
+  { name: "Seedance 1.5",  color: "#f59e0b", i2vSubject: 83.4, i2vBackground: 79.6, cameraStatic: 92.6, cameraPan: 80.2, cameraZoom: 73.8 },
+  { name: "Wan 2.2",       color: "#10b981", i2vSubject: 80.8, i2vBackground: 76.4, cameraStatic: 90.2, cameraPan: 76.8, cameraZoom: 69.6 },
+  { name: "LTX 2.3",       color: "#ef4444", i2vSubject: 77.6, i2vBackground: 73.2, cameraStatic: 87.8, cameraPan: 73.4, cameraZoom: 65.8 },
 ];
 
 const DIMENSIONS = Object.keys(T2V_MODELS[0].dimensions);
@@ -282,9 +331,9 @@ export default function EvalVideoDashboard() {
   const [activeTrack, setActiveTrack] = useState<"t2v" | "i2v">("t2v");
   const [showGuide, setShowGuide] = useState(false);
   const [selectedModels, setSelectedModels] = useState<Set<string>>(
-    new Set(["Kling 2.0", "Veo 2"])
+    new Set(["Veo 3.1", "Kling 2.6 Pro"])
   );
-  const [detailModel, setDetailModel] = useState<string>("Kling 2.0");
+  const [detailModel, setDetailModel] = useState<string>("Veo 3.1");
 
   const toggleModel = (name: string) => {
     setSelectedModels((prev) => {
