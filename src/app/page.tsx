@@ -212,7 +212,7 @@ export default function HomePage() {
           {[
             { label: "T2V Models Evaluated", value: String(VIDEO_STATS.models), sub: "VBench 1.0 · all 16 dims", color: "var(--accent-cyan)" },
             { label: "VBench Dimensions", value: String(VIDEO_STATS.dims), sub: "Video Quality + Condition Consistency", color: "#a78bfa" },
-            { label: "Avg Agent Quality", value: `${AGENT_STATS.avgQuality}%`, sub: "5-dim LLM-as-judge · 5-shot", color: "var(--accent-emerald)" },
+            { label: "Avg Agent Quality", value: `${AGENT_STATS.avgQuality}%`, sub: "8-dim LLM-as-judge · 5-shot", color: "var(--accent-emerald)" },
             { label: "Best T2V Performer", value: VIDEO_STATS.bestModel, sub: `EvalForge composite ${VIDEO_STATS.bestScore}`, color: "var(--accent-amber)" },
           ].map((card) => (
             <div key={card.label} className="glass-card p-5">

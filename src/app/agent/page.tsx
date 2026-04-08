@@ -3,7 +3,7 @@ import EvalAgentDashboard from "@/components/EvalAgentDashboard";
 export const metadata = {
   title: "Agent Evaluation · EvalForge",
   description:
-    "500 conversations from a Gemma 4-based assistant evaluated across 5 quality dimensions via LLM-as-judge.",
+    "500 conversations from a Gemma 4-based assistant evaluated across 8 quality dimensions via LLM-as-judge.",
 };
 
 export default function AgentPage() {
@@ -15,8 +15,8 @@ export default function AgentPage() {
         </h1>
         <p className="mt-1 text-sm text-[var(--text-secondary)]">
           500 conversations from an internal Gemma 4-based conversational assistant — intent
-          classification across 7 categories and 5-dimension quality scoring via LLM-as-judge
-          with 5-shot calibration.
+          classification across 7 categories and 8-dimension quality scoring (including safety,
+          reasoning, efficiency) via LLM-as-judge with 5-shot calibration.
         </p>
       </div>
       <EvalAgentDashboard />

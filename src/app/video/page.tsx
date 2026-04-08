@@ -3,7 +3,7 @@ import EvalVideoDashboard from "@/components/EvalVideoDashboard";
 export const metadata = {
   title: "Video Evaluation · EvalForge",
   description:
-    "T2V and I2V model evaluation across all 16 VBench 1.0 dimensions and VBench++ I2V metrics.",
+    "T2V models evaluated across 16 VBench 1.0 dimensions (7 Video Quality + 9 Video-Condition Consistency) with pairwise win-rate ranking.",
 };
 
 export default function VideoPage() {
@@ -14,8 +14,8 @@ export default function VideoPage() {
           Video Evaluation Track
         </h1>
         <p className="mt-1 text-sm text-[var(--text-secondary)]">
-          T2V models evaluated across all 16 official VBench 1.0 dimensions (Video Quality +
-          Video-Condition Consistency). I2V track uses VBench++ Subject/Background/Camera metrics.
+          T2V models evaluated across all 16 official VBench 1.0 dimensions — 7 Video Quality
+          + 9 Video-Condition Consistency. Rankings use pairwise win-rate matrices, not composite scores.
         </p>
       </div>
       <EvalVideoDashboard />
