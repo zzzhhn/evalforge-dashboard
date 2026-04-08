@@ -179,7 +179,7 @@ export default function HomePage() {
         <h2 className="mb-6 text-2xl font-bold text-[var(--text-primary)]">
           Pipeline Architecture
         </h2>
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid gap-6">
           <div className="glass-card p-6">
             <h3 className="mb-4 text-lg font-semibold text-[var(--accent-cyan)]">
               T2V Evaluation Track
