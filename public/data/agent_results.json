@@ -1,0 +1,89 @@
+{
+  "metadata": {
+    "pipeline": "EvalForge v0.1.0",
+    "track": "agent",
+    "total_conversations": 500,
+    "total_turns": 3600,
+    "evaluation_date": "2026-02-20"
+  },
+  "intent_distribution": {
+    "QA_EXPLANATION": { "count": 180, "percentage": 36.0 },
+    "CODE_DEV": { "count": 130, "percentage": 26.0 },
+    "CONTENT_GENERATION": { "count": 85, "percentage": 17.0 },
+    "DATA_ANALYSIS": { "count": 45, "percentage": 9.0 },
+    "TOOL_ACTION": { "count": 30, "percentage": 6.0 },
+    "TASK_PLANNING": { "count": 20, "percentage": 4.0 },
+    "TRANSLATION": { "count": 10, "percentage": 2.0 }
+  },
+  "quality_scores": {
+    "overall": {
+      "coverage": 0.78,
+      "relevance": 0.85,
+      "executability": 0.72,
+      "practicality": 0.69
+    },
+    "by_intent": {
+      "QA_EXPLANATION": {
+        "coverage": 0.82,
+        "relevance": 0.88,
+        "executability": 0.65,
+        "practicality": 0.71
+      },
+      "CODE_DEV": {
+        "coverage": 0.76,
+        "relevance": 0.84,
+        "executability": 0.88,
+        "practicality": 0.79
+      },
+      "CONTENT_GENERATION": {
+        "coverage": 0.80,
+        "relevance": 0.86,
+        "executability": 0.61,
+        "practicality": 0.67
+      },
+      "DATA_ANALYSIS": {
+        "coverage": 0.74,
+        "relevance": 0.82,
+        "executability": 0.78,
+        "practicality": 0.72
+      },
+      "TOOL_ACTION": {
+        "coverage": 0.71,
+        "relevance": 0.80,
+        "executability": 0.85,
+        "practicality": 0.68
+      },
+      "TASK_PLANNING": {
+        "coverage": 0.83,
+        "relevance": 0.87,
+        "executability": 0.58,
+        "practicality": 0.62
+      },
+      "TRANSLATION": {
+        "coverage": 0.90,
+        "relevance": 0.92,
+        "executability": 0.70,
+        "practicality": 0.65
+      }
+    }
+  },
+  "output_format_distribution": {
+    "Long article": 35.2,
+    "Code snippet": 24.1,
+    "Bullet list": 18.3,
+    "Short answer": 12.0,
+    "Table": 5.4,
+    "Structured data": 3.0,
+    "Other": 2.0
+  },
+  "negative_feedback": {
+    "rate": 0.09,
+    "causes": {
+      "unclear_requirements": 36,
+      "hallucination": 22,
+      "content_issues": 22,
+      "incomplete": 12,
+      "other": 8
+    }
+  }
+}
