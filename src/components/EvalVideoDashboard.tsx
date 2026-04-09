@@ -74,16 +74,15 @@ export default function EvalVideoDashboard() {
     [winMatrix]
   );
 
-  /* ── Per-Metric Percentile Radar ── */
+  /* ── Raw Score Radar (matches VBench 2.0 Figure 2) ── */
+  /* Paper uses raw scores on 0-1 scale; we use 0-100 for readability */
   const radarData = useMemo(
     () =>
       DIMENSION_NAMES.map((dim) => {
         const entry: Record<string, string | number> = { dimension: dim };
         T2V_MODELS.forEach((m) => {
           if (selectedModels.has(m.name)) {
-            entry[m.name] = Math.round(
-              metricNormalized(m, dim, T2V_MODELS)
-            );
+            entry[m.name] = getScore(m, dim);
           }
         });
         return entry;
@@ -154,17 +153,16 @@ export default function EvalVideoDashboard() {
         winRanking={winRanking}
       />
 
-      {/* Per-Metric Percentile Radar */}
+      {/* Raw Score Radar (matching VBench 2.0 Figure 2) */}
       <div className="eval-card">
         <h3 className="eval-card-title">
-          Per-Metric Normalized Radar
+          VBench 2.0 Evaluation Radar
         </h3>
         <p className="eval-card-subtitle">
-          Min-max normalized scores per dimension (best model = 100,
-          worst = 0). Since raw score ranges vary widely across the
-          18 dimensions (e.g. Dynamic Attribute ~8% to Human Clothes
-          ~98%), normalization lets you compare relative spread at a
-          glance.
+          Raw scores per dimension (0-100%), matching Figure 2 of the VBench
+          2.0 paper. Scores vary widely: Human Fidelity dims cluster at
+          60-98%, while Controllability dims spread 8-73% — reflecting the
+          diverse difficulty of intrinsic faithfulness evaluation.
         </p>
         <ResponsiveContainer width="100%" height={420}>
           <RadarChart
@@ -217,7 +215,7 @@ export default function EvalVideoDashboard() {
                 fontSize: 12,
               }}
               formatter={(value: unknown) =>
-                [`${Math.round(Number(value))}/100`, "Normalized"] as [string, string]
+                [`${Number(value).toFixed(1)}%`, "Score"] as [string, string]
               }
             />
           </RadarChart>

@@ -46,156 +46,28 @@ export interface ModelResult {
   metrics: MetricScore[];
 }
 
-/* ── 18 VBench 2.0 Dimensions ── */
+/* ── 18 VBench 2.0 Dimensions ──
+   Ordered to match Figure 2 radar chart (clockwise from 12 o'clock) */
 
 export const VBENCH_DIMENSIONS: VBenchDimension[] = [
-  /* ── Human Fidelity (3) ── */
-  {
-    name: "Human Anatomy",
-    category: "Human Fidelity",
-    evaluator: "ViT anomaly detector (150K real+generated frames)",
-    description:
-      "Structural correctness of human figures — identifies unnatural deformations in hands, faces, and bodies using anomaly detection models trained on curated real and AI-generated human frames.",
-  },
-  {
-    name: "Human Clothes",
-    category: "Human Fidelity",
-    evaluator: "Video-based multi-question answering (VQA)",
-    description:
-      "Temporal consistency of clothing — ensures outfits remain stable throughout the video, evaluated via video-based multi-question answering pipeline.",
-    note: "Temporal consistency of clothing appearance across frames",
-  },
-  {
-    name: "Human Identity",
-    category: "Human Fidelity",
-    evaluator: "ArcFace + RetinaFace",
-    description:
-      "Temporal consistency of human identity — measured by facial feature similarity using ArcFace embeddings, with face detection by RetinaFace.",
-    note: "Face ID consistency tracked frame-by-frame",
-  },
-
-  /* ── Creativity (2) ── */
-  {
-    name: "Diversity",
-    category: "Creativity",
-    evaluator: "VGG-19 feature representations",
-    description:
-      "Inter-sample variation for the same prompt — measures style and content diversity across 20 sampled videos using pre-trained VGG-19 feature representations.",
-  },
-  {
-    name: "Composition",
-    category: "Creativity",
-    evaluator: "Structured VQA pipeline",
-    description:
-      "Ability to compose species combinations, single-entity actions, and multi-entity interactions. Assesses whether the model can generate novel and uncommon compositions.",
-  },
-
-  /* ── Controllability (7) ── */
-  {
-    name: "Dynamic Spatial Relationship",
-    category: "Controllability",
-    evaluator: "Video-based multi-question answering",
-    description:
-      "Whether models accurately reposition objects in response to spatial instructions (e.g., 'A dog is on the left of a sofa, then the dog runs to the front'). Single-entity disentangled prompts.",
-    note: "Entity sub-dimension — spatial repositioning accuracy",
-  },
-  {
-    name: "Dynamic Attribute",
-    category: "Controllability",
-    evaluator: "Video-based multi-question answering",
-    description:
-      "Whether models can modify entity attributes (color, size, texture) mid-video as instructed. Tested with disentangled single-attribute-change prompts.",
-    note: "Entity sub-dimension — mid-video attribute changes",
-  },
-  {
-    name: "Motion Order Understanding",
-    category: "Controllability",
-    evaluator: "Text description alignment (VLM + LLM)",
-    description:
-      "Whether models generate several actions or motions in the specified order. Uses text description alignment pipeline to verify motion sequence matches the prompt.",
-    note: "Event sub-dimension — action sequence ordering",
-  },
-  {
-    name: "Human Interaction",
-    category: "Controllability",
-    evaluator: "Text description alignment (VLM + LLM)",
-    description:
-      "Whether two humans can interact as prompted (e.g., 'One person hands an object to another'). Prompts require physical contact interactions, not ambiguous social scenarios.",
-    note: "Event sub-dimension — physical contact interactions",
-  },
-  {
-    name: "Complex Landscape",
-    category: "Controllability",
-    evaluator: "Text description alignment",
-    description:
-      "Whether models faithfully follow long-form landscape descriptions (150+ words) including multiple scene transitions driven by camera movements.",
-    note: "Content sub-dimension — long-form landscape adherence",
-  },
-  {
-    name: "Complex Plot",
-    category: "Controllability",
-    evaluator: "Text description alignment",
-    description:
-      "Ability to construct multi-scene narratives from prompts describing multi-stage events (e.g., a four-act story with 150+ words). Tests plot consistency.",
-    note: "Content sub-dimension — multi-scene narrative fidelity",
-  },
-  {
-    name: "Camera Motion",
-    category: "Controllability",
-    evaluator: "CoTracker-v2 + heuristics",
-    description:
-      "Whether specified camera movements are generated. Extends VBench++ taxonomy to 9 types including 'Orbit' and 'Oblique shot'. Assessed via point tracking with CoTracker-v2.",
-  },
-
-  /* ── Physics (4) ── */
-  {
-    name: "Mechanics",
-    category: "Physics",
-    evaluator: "Video-based multi-question answering",
-    description:
-      "Whether models simulate basic mechanical physics — gravity, buoyancy, and stress. Uses GPT-4o-generated visual descriptions of expected physical behavior as reference.",
-    note: "State Change sub-dimension — gravity, buoyancy, stress",
-  },
-  {
-    name: "Thermotics",
-    category: "Physics",
-    evaluator: "Video-based multi-question answering",
-    description:
-      "Whether models simulate state transitions such as vaporization, liquefaction, and sublimation. Temperature-specific prompts (e.g., dry ice at -90°C).",
-    note: "State Change sub-dimension — thermal state transitions",
-  },
-  {
-    name: "Material",
-    category: "Physics",
-    evaluator: "Video-based multi-question answering",
-    description:
-      "Whether models correctly depict color mixing, hardness, combustion, and solubility. Tests material property adherence via structured questioning.",
-    note: "State Change sub-dimension — material property behavior",
-  },
-  {
-    name: "Multi-View Consistency",
-    category: "Physics",
-    evaluator: "SIFT + FLANN + RANSAC + RAFT",
-    description:
-      "3D geometric consistency — ensures objects retain structural consistency across different angles using feature matching stability and camera motion speed compensation.",
-    note: "Geometry sub-dimension — structural consistency across viewpoints",
-  },
-
-  /* ── Commonsense (2) ── */
-  {
-    name: "Motion Rationality",
-    category: "Commonsense",
-    evaluator: "Video-based multi-question answering",
-    description:
-      "Whether generated motion leads to correct real-world consequences. Detects 'fake' motions: fake eating (food unchanged), fake walking (not moving forward), fake cutting (object intact).",
-  },
-  {
-    name: "Instance Preservation",
-    category: "Commonsense",
-    evaluator: "YOLO-World frame-by-frame",
-    description:
-      "Whether object counts remain stable throughout the video. Detects unnatural merging, duplication, or disappearance using YOLO-World open-vocabulary detection frame-by-frame.",
-  },
+  /* 1 */ { name: "Human Anatomy",              category: "Human Fidelity",  evaluator: "ViT anomaly detector (150K real+generated frames)",   description: "Structural correctness of human figures — identifies unnatural deformations in hands, faces, and bodies using anomaly detection models trained on curated real and AI-generated human frames." },
+  /* 2 */ { name: "Human Identity",              category: "Human Fidelity",  evaluator: "ArcFace + RetinaFace",                               description: "Temporal consistency of human identity — measured by facial feature similarity using ArcFace embeddings, with face detection by RetinaFace.",                                                  note: "Face ID consistency tracked frame-by-frame" },
+  /* 3 */ { name: "Human Clothes",               category: "Human Fidelity",  evaluator: "Video-based multi-question answering (VQA)",          description: "Temporal consistency of clothing — ensures outfits remain stable throughout the video, evaluated via video-based multi-question answering pipeline.",                                          note: "Temporal consistency of clothing appearance across frames" },
+  /* 4 */ { name: "Multi-View Consistency",      category: "Physics",         evaluator: "SIFT + FLANN + RANSAC + RAFT",                       description: "3D geometric consistency — ensures objects retain structural consistency across different angles using feature matching stability and camera motion speed compensation.",                        note: "Geometry sub-dimension — structural consistency across viewpoints" },
+  /* 5 */ { name: "Material",                    category: "Physics",         evaluator: "Video-based multi-question answering",                description: "Whether models correctly depict color mixing, hardness, combustion, and solubility. Tests material property adherence via structured questioning.",                                            note: "State Change sub-dimension — material property behavior" },
+  /* 6 */ { name: "Thermotics",                  category: "Physics",         evaluator: "Video-based multi-question answering",                description: "Whether models simulate state transitions such as vaporization, liquefaction, and sublimation. Temperature-specific prompts (e.g., dry ice at -90°C).",                                       note: "State Change sub-dimension — thermal state transitions" },
+  /* 7 */ { name: "Mechanics",                   category: "Physics",         evaluator: "Video-based multi-question answering",                description: "Whether models simulate basic mechanical physics — gravity, buoyancy, and stress. Uses GPT-4o-generated visual descriptions of expected physical behavior as reference.",                      note: "State Change sub-dimension — gravity, buoyancy, stress" },
+  /* 8 */ { name: "Instance Preservation",       category: "Commonsense",     evaluator: "YOLO-World frame-by-frame",                          description: "Whether object counts remain stable throughout the video. Detects unnatural merging, duplication, or disappearance using YOLO-World open-vocabulary detection frame-by-frame." },
+  /* 9 */ { name: "Motion Rationality",          category: "Commonsense",     evaluator: "Video-based multi-question answering",                description: "Whether generated motion leads to correct real-world consequences. Detects 'fake' motions: fake eating (food unchanged), fake walking (not moving forward), fake cutting (object intact)." },
+  /*10 */ { name: "Camera Motion",               category: "Controllability", evaluator: "CoTracker-v2 + heuristics",                          description: "Whether specified camera movements are generated. Extends VBench++ taxonomy to 9 types including 'Orbit' and 'Oblique shot'. Assessed via point tracking with CoTracker-v2." },
+  /*11 */ { name: "Complex Plot",                category: "Controllability", evaluator: "Text description alignment",                         description: "Ability to construct multi-scene narratives from prompts describing multi-stage events (e.g., a four-act story with 150+ words). Tests plot consistency.",                                     note: "Content sub-dimension — multi-scene narrative fidelity" },
+  /*12 */ { name: "Complex Landscape",           category: "Controllability", evaluator: "Text description alignment",                         description: "Whether models faithfully follow long-form landscape descriptions (150+ words) including multiple scene transitions driven by camera movements.",                                              note: "Content sub-dimension — long-form landscape adherence" },
+  /*13 */ { name: "Human Interaction",           category: "Controllability", evaluator: "Text description alignment (VLM + LLM)",             description: "Whether two humans can interact as prompted (e.g., 'One person hands an object to another'). Prompts require physical contact interactions, not ambiguous social scenarios.",                   note: "Event sub-dimension — physical contact interactions" },
+  /*14 */ { name: "Motion Order Understanding",  category: "Controllability", evaluator: "Text description alignment (VLM + LLM)",             description: "Whether models generate several actions or motions in the specified order. Uses text description alignment pipeline to verify motion sequence matches the prompt.",                              note: "Event sub-dimension — action sequence ordering" },
+  /*15 */ { name: "Dynamic Attribute",           category: "Controllability", evaluator: "Video-based multi-question answering",                description: "Whether models can modify entity attributes (color, size, texture) mid-video as instructed. Tested with disentangled single-attribute-change prompts.",                                        note: "Entity sub-dimension — mid-video attribute changes" },
+  /*16 */ { name: "Dynamic Spatial Relationship", category: "Controllability", evaluator: "Video-based multi-question answering",               description: "Whether models accurately reposition objects in response to spatial instructions (e.g., 'A dog is on the left of a sofa, then the dog runs to the front'). Single-entity disentangled prompts.", note: "Entity sub-dimension — spatial repositioning accuracy" },
+  /*17 */ { name: "Composition",                 category: "Creativity",      evaluator: "Structured VQA pipeline",                            description: "Ability to compose species combinations, single-entity actions, and multi-entity interactions. Assesses whether the model can generate novel and uncommon compositions." },
+  /*18 */ { name: "Diversity",                   category: "Creativity",      evaluator: "VGG-19 feature representations",                     description: "Inter-sample variation for the same prompt — measures style and content diversity across 20 sampled videos using pre-trained VGG-19 feature representations." },
 ];
 
 /* ── Category exports ── */
@@ -261,7 +133,7 @@ export const DIMENSION_NAMES = VBENCH_DIMENSIONS.map((d) => d.name);
 export const T2V_MODELS: ModelResult[] = [
   {
     name: "HunyuanVideo",
-    color: "#ec4899",
+    color: "#eab308",  /* yellow — matches VBench 2.0 Figure 2 */
     videoLength: "5.3s",
     resolution: "720×1280",
     fps: 24,
@@ -293,7 +165,7 @@ export const T2V_MODELS: ModelResult[] = [
   },
   {
     name: "CogVideoX-1.5",
-    color: "#8b5cf6",
+    color: "#22c55e",  /* green — matches VBench 2.0 Figure 2 */
     videoLength: "10.1s",
     resolution: "768×1360",
     fps: 16,
@@ -320,7 +192,7 @@ export const T2V_MODELS: ModelResult[] = [
   },
   {
     name: "Sora-480p",
-    color: "#06b6d4",
+    color: "#a855f7",  /* purple — matches VBench 2.0 Figure 2 */
     videoLength: "5.0s",
     resolution: "480×854",
     fps: 30,
@@ -347,7 +219,7 @@ export const T2V_MODELS: ModelResult[] = [
   },
   {
     name: "Kling 1.6",
-    color: "#f59e0b",
+    color: "#3b82f6",  /* blue — matches VBench 2.0 Figure 2 */
     videoLength: "10.0s",
     resolution: "720×1280",
     fps: 24,
