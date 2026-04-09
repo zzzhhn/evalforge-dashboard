@@ -30,7 +30,7 @@ import {
   getScore,
   pairwiseWins,
   totalPairwiseWins,
-  metricPercentile,
+  metricNormalized,
 } from "@/data/vbench";
 
 /* ──────────────────────────────────────────────────────────────────
@@ -86,7 +86,7 @@ export default function EvalVideoDashboard() {
         T2V_MODELS.forEach((m) => {
           if (selectedModels.has(m.name)) {
             entry[m.name] = Math.round(
-              metricPercentile(m, dim, T2V_MODELS)
+              metricNormalized(m, dim, T2V_MODELS)
             );
           }
         });
@@ -99,14 +99,14 @@ export default function EvalVideoDashboard() {
   const detail =
     T2V_MODELS.find((m) => m.name === detailModel) ?? T2V_MODELS[0];
 
-  const vqMetrics = VQ_DIMENSIONS.map((d) => ({
-    dim: d,
-    score: getScore(detail, d.name),
-  }));
-  const vccMetrics = VCC_DIMENSIONS.map((d) => ({
-    dim: d,
-    score: getScore(detail, d.name),
-  }));
+  const vqMetrics = useMemo(
+    () => VQ_DIMENSIONS.map((d) => ({ dim: d, score: getScore(detail, d.name) })),
+    [detail]
+  );
+  const vccMetrics = useMemo(
+    () => VCC_DIMENSIONS.map((d) => ({ dim: d, score: getScore(detail, d.name) })),
+    [detail]
+  );
 
   return (
     <div className="eval-dashboard">
@@ -178,14 +178,13 @@ export default function EvalVideoDashboard() {
           {/* Per-Metric Percentile Radar */}
           <div className="eval-card">
             <h3 className="eval-card-title">
-              Per-Metric Percentile Radar
+              Per-Metric Normalized Radar
             </h3>
             <p className="eval-card-subtitle">
-              Relative model ranking per dimension (percentile across
-              evaluated models). Since raw score ranges vary widely
-              (quality 95-99%, stylistic 18-40%), each metric is
-              normalised to 0-100 percentile across the 5 models for
-              visual comparison.
+              Min-max normalized scores per dimension (best model = 100,
+              worst = 0). Since raw score ranges vary widely (quality
+              95-99%, stylistic 18-40%), normalization lets you compare
+              relative spread across all 16 dimensions at a glance.
             </p>
             <ResponsiveContainer width="100%" height={420}>
               <RadarChart
@@ -238,7 +237,7 @@ export default function EvalVideoDashboard() {
                     fontSize: 12,
                   }}
                   formatter={(value: unknown) =>
-                    [`${value}th percentile`, "Rank"] as [string, string]
+                    [`${Math.round(Number(value))}/100`, "Normalized"] as [string, string]
                   }
                 />
               </RadarChart>
@@ -380,26 +379,32 @@ function WinRateMatrix({
       </p>
       <div className="eval-table-wrap">
         <table className="eval-table eval-table--matrix">
+          <caption className="sr-only">
+            Pairwise win-rate matrix: rows are challenger models, columns are
+            opponent models. Each cell shows how many of the 16 VBench
+            dimensions the row model beats the column model.
+          </caption>
           <thead>
             <tr>
-              <th>vs.</th>
+              <th scope="col">vs.</th>
               {T2V_MODELS.map((m) => (
-                <th key={m.name} style={{ color: m.color }}>
+                <th key={m.name} scope="col" style={{ color: m.color }}>
                   {m.name}
                 </th>
               ))}
-              <th>Total Wins</th>
+              <th scope="col">Total Wins</th>
             </tr>
           </thead>
           <tbody>
             {winMatrix.map((row, ri) => (
               <tr key={row.model.name}>
-                <td
+                <th
+                  scope="row"
                   className="eval-metric-name"
                   style={{ color: row.model.color }}
                 >
                   {row.model.name}
-                </td>
+                </th>
                 {row.wins.map((w, ci) => (
                   <td
                     key={T2V_MODELS[ci].name}

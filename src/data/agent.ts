@@ -231,6 +231,22 @@ export const GRADE_COLORS: Record<string, string> = {
   Moderate:  "#f59e0b",
 };
 
+/* ── Score → color utilities (single source of truth) ──────────── */
+
+export function scoreToColor(v: number): string {
+  if (v >= 90) return "#10b981";
+  if (v >= 80) return "#6366f1";
+  if (v >= 70) return "#f59e0b";
+  return "#ef4444";
+}
+
+export function scoreToBg(v: number): string {
+  if (v >= 90) return "rgba(16,185,129,0.18)";
+  if (v >= 80) return "rgba(99,102,241,0.18)";
+  if (v >= 70) return "rgba(245,158,11,0.18)";
+  return "rgba(239,68,68,0.18)";
+}
+
 /* ── Computed total ────────────────────────────────────────────── */
 
 export const TOTAL_CONVERSATIONS = INTENTS.reduce((s, i) => s + i.count, 0);

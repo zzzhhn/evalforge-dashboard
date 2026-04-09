@@ -378,6 +378,8 @@ export function pairwiseWins(a: ModelResult, b: ModelResult): number {
   return DIMENSION_NAMES.reduce((wins, dim) => {
     const sa = getScore(a, dim);
     const sb = getScore(b, dim);
+    // Ties award 0.5 each so win counts always sum to 16 across any pair
+    if (sa === sb) return wins + 0.5;
     return wins + (sa > sb ? 1 : 0);
   }, 0);
 }
@@ -394,9 +396,11 @@ export function totalPairwiseWins(
   }, 0);
 }
 
-/* ── Helper: compute percentile (0-100) for a metric across models ── */
+/* ── Helper: min-max normalize a metric score to 0-100 across models ── */
+/* NOTE: This is range normalization, not a statistical percentile rank.   */
+/* Best model → 100, worst → 0; used for the per-metric comparison radar. */
 
-export function metricPercentile(
+export function metricNormalized(
   model: ModelResult,
   dimName: string,
   allModels: readonly ModelResult[]

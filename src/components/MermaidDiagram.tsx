@@ -1,63 +1,62 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useId } from "react";
 
 interface Props {
   chart: string;
   caption?: string;
 }
 
-let idCounter = 0;
+/* Mermaid must be initialized once globally. Track whether it has been done. */
+let mermaidInitialized = false;
+
+function ensureMermaidInitialized(mermaid: { initialize: (cfg: object) => void }) {
+  if (mermaidInitialized) return;
+  mermaidInitialized = true;
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: "base",
+    themeVariables: {
+      background:          "#0f0f10",
+      primaryColor:        "#1e1e24",
+      primaryTextColor:    "#e8e8f0",
+      primaryBorderColor:  "#2e2e3a",
+      lineColor:           "#4a4a5a",
+      secondaryColor:      "#1a1a22",
+      tertiaryColor:       "#161620",
+      nodeBorder:          "#3a3a4a",
+      mainBkg:             "#1e1e28",
+      nodeTextColor:       "#c8c8d8",
+      edgeLabelBackground: "#1e1e28",
+      clusterBkg:          "#14141c",
+      clusterBorder:       "#2a2a38",
+      titleColor:          "#a8a8c0",
+      fontFamily:          "'SF Pro Display', 'Inter', sans-serif",
+      fontSize:            "13px",
+    },
+    flowchart: { htmlLabels: true, curve: "basis" },
+  });
+}
 
 export default function MermaidDiagram({ chart, caption }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
-  const idRef = useRef(`mermaid-${++idCounter}`);
+  /* useId() is SSR-safe and stable across Strict Mode double-invocations */
+  const reactId = useId();
+  const diagramId = `mermaid-${reactId.replace(/:/g, "")}`;
 
   useEffect(() => {
     let cancelled = false;
 
     import("mermaid").then(({ default: mermaid }) => {
       if (cancelled) return;
-
-      mermaid.initialize({
-        startOnLoad: false,
-        theme: "base",
-        themeVariables: {
-          /* Match site's dark palette */
-          background:         "#0f0f10",
-          primaryColor:       "#1e1e24",
-          primaryTextColor:   "#e8e8f0",
-          primaryBorderColor: "#2e2e3a",
-          lineColor:          "#4a4a5a",
-          secondaryColor:     "#1a1a22",
-          tertiaryColor:      "#161620",
-          /* Node text */
-          nodeBorder:         "#3a3a4a",
-          mainBkg:            "#1e1e28",
-          nodeTextColor:      "#c8c8d8",
-          /* Edges */
-          edgeLabelBackground: "#1e1e28",
-          /* Cluster */
-          clusterBkg:         "#14141c",
-          clusterBorder:      "#2a2a38",
-          titleColor:         "#a8a8c0",
-          /* Font */
-          fontFamily:         "'SF Pro Display', 'Inter', sans-serif",
-          fontSize:           "13px",
-        },
-        flowchart: {
-          htmlLabels: true,
-          curve: "basis",
-        },
-      });
+      ensureMermaidInitialized(mermaid);
 
       mermaid
-        .render(idRef.current, chart)
+        .render(diagramId, chart)
         .then(({ svg }) => {
           if (!cancelled && containerRef.current) {
             containerRef.current.innerHTML = svg;
-            /* Remove fixed dimensions so it scales responsively */
             const svgEl = containerRef.current.querySelector("svg");
             if (svgEl) {
               svgEl.removeAttribute("height");
@@ -74,7 +73,7 @@ export default function MermaidDiagram({ chart, caption }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [chart]);
+  }, [chart, diagramId]);
 
   if (error) {
     return (

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Video, Bot, ArrowRight } from "lucide-react";
 import MermaidDiagram from "@/components/MermaidDiagram";
+import { INTENTS, TOTAL_CONVERSATIONS } from "@/data/agent";
 
 const VIDEO_STATS = {
   models: 5,
@@ -19,20 +20,22 @@ const VIDEO_STATS = {
   ],
 };
 
+const INTENT_COLORS = [
+  "#6366f1", "#10b981", "#ec4899", "#f59e0b",
+  "#8b5cf6", "#06b6d4", "#84cc16",
+];
+
 const AGENT_STATS = {
-  conversations: 500,
+  conversations: TOTAL_CONVERSATIONS,
   turns: 3600,
-  intents: 7,
+  intents: INTENTS.length,
   avgQuality: "86.3",
-  piePoints: [
-    { name: "Information Query", value: 28.4, color: "#6366f1" },
-    { name: "Task Execution",    value: 19.6, color: "#10b981" },
-    { name: "Code Generation",   value: 16.6, color: "#ec4899" },
-    { name: "Creative Writing",  value: 13.4, color: "#f59e0b" },
-    { name: "Analysis",          value: 10.8, color: "#8b5cf6" },
-    { name: "Conversation",      value:  7.6, color: "#06b6d4" },
-    { name: "Translation",       value:  3.6, color: "#84cc16" },
-  ],
+  /* Derived from INTENTS so homepage stays in sync with data updates */
+  piePoints: INTENTS.map((intent, i) => ({
+    name:  intent.name,
+    value: +((intent.count / TOTAL_CONVERSATIONS) * 100).toFixed(1),
+    color: INTENT_COLORS[i % INTENT_COLORS.length],
+  })),
 };
 
 const T2V_PIPELINE = [

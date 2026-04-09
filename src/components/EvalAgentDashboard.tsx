@@ -28,24 +28,10 @@ import {
   GRADE_COLORS,
   TOTAL_CONVERSATIONS,
   AGENT_GUIDE,
+  scoreToColor,
+  scoreToBg,
 } from "@/data/agent";
 import type { QualityDim } from "@/data/agent";
-
-/* ── Helpers ───────────────────────────────────────────────────── */
-
-function scoreColor(v: number): string {
-  if (v >= 90) return "#10b981";
-  if (v >= 80) return "#6366f1";
-  if (v >= 70) return "#f59e0b";
-  return "#ef4444";
-}
-
-function scoreBg(v: number): string {
-  if (v >= 90) return "rgba(16,185,129,0.18)";
-  if (v >= 80) return "rgba(99,102,241,0.18)";
-  if (v >= 70) return "rgba(245,158,11,0.18)";
-  return "rgba(239,68,68,0.18)";
-}
 
 /* ── Component ─────────────────────────────────────────────────── */
 
@@ -350,8 +336,8 @@ export default function EvalAgentDashboard() {
                         key={dim}
                         className="eval-heatmap-cell"
                         style={{
-                          background: scoreBg(val),
-                          color: scoreColor(val),
+                          background: scoreToBg(val),
+                          color: scoreToColor(val),
                         }}
                         title={`${intent.name} — ${DIM_LABELS[dim]}: ${val}`}
                       >

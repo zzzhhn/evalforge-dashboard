@@ -8,6 +8,7 @@ import {
   Tooltip,
   Legend,
 } from "recharts";
+import type { PieLabelRenderProps } from "recharts";
 
 interface IntentSlice {
   readonly name: string;
@@ -42,9 +43,11 @@ export default function IntentPieChart({ data }: IntentPieChartProps) {
           dataKey="percentage"
           nameKey="name"
           stroke="none"
-          label={(props) => {
-            const p = props as unknown as { name: string; percentage: number };
-            return `${p.name} ${p.percentage.toFixed(1)}%`;
+          label={(props: PieLabelRenderProps) => {
+            const name = typeof props.name === "string" ? props.name : "";
+            // Recharts passes `percent` as 0-1; `percentage` is our data field
+            const pct = typeof props.percent === "number" ? props.percent * 100 : 0;
+            return `${name} ${pct.toFixed(1)}%`;
           }}
         >
           {data.map((_, i) => (
