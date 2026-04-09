@@ -275,7 +275,12 @@ export function totalPairwiseWins(
   }, 0);
 }
 
-/* ── Helper: min-max normalize a metric score to 0-100 across models ── */
+/* ── Helper: padded min-max normalize a metric score across models ──
+   Maps to [FLOOR, CEIL] instead of [0, 100] to match Figure 2's radar
+   (no model reaches center or outer edge in the paper). */
+
+const NORM_FLOOR = 15;
+const NORM_CEIL = 85;
 
 export function metricNormalized(
   model: ModelResult,
@@ -287,7 +292,8 @@ export function metricNormalized(
   const max = Math.max(...scores);
   if (max === min) return 50;
   const score = getScore(model, dimName);
-  return ((score - min) / (max - min)) * 100;
+  const pct = (score - min) / (max - min);
+  return NORM_FLOOR + pct * (NORM_CEIL - NORM_FLOOR);
 }
 
 /* ── VBench 2.0 Guide content ── */
