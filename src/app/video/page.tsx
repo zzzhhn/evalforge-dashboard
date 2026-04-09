@@ -3,7 +3,7 @@ import EvalVideoDashboard from "@/components/EvalVideoDashboard";
 export const metadata = {
   title: "Video Evaluation · EvalForge",
   description:
-    "T2V models evaluated across 16 VBench 1.0 dimensions (7 Video Quality + 9 Video-Condition Consistency) with pairwise win-rate ranking.",
+    "T2V models evaluated across 18 VBench 2.0 intrinsic faithfulness dimensions with pairwise win-rate ranking.",
 };
 
 export default function VideoPage() {
@@ -14,8 +14,8 @@ export default function VideoPage() {
           Video Evaluation Track
         </h1>
         <p className="mt-1 text-sm text-[var(--text-secondary)]">
-          T2V models evaluated across all 16 official VBench 1.0 dimensions — 7 Video Quality
-          + 9 Video-Condition Consistency. Rankings use pairwise win-rate matrices, not composite scores.
+          T2V models evaluated across all 18 VBench 2.0 dimensions (Human Fidelity, Creativity,
+          Controllability, Physics, Commonsense). All scores from the published paper (Table 2).
         </p>
       </div>
       <EvalVideoDashboard />

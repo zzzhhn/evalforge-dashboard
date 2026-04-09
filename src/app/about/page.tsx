@@ -1,7 +1,8 @@
 import { ExternalLink } from "lucide-react";
 import {
-  VQ_DIMENSIONS,
-  VCC_DIMENSIONS,
+  CATEGORIES,
+  CATEGORY_COLORS,
+  dimsByCategory,
 } from "@/data/vbench";
 import {
   QUALITY_DIMS,
@@ -88,45 +89,38 @@ export default function AboutPage() {
           Video Evaluation Methodology
         </h2>
         <p className="text-sm text-text-secondary mb-6">
-          Video quality is assessed using the official VBench 1.0 protocol
-          (CVPR 2024): 16 dimensions split into 7 Video Quality and 9
-          Video-Condition Consistency metrics. Rankings use pairwise win-rate
-          matrices — not a single composite score — matching the VBench paper.
+          Video intrinsic faithfulness is assessed using the VBench 2.0 protocol
+          (arXiv 2503.21755): 18 dimensions across 5 broad categories. Rankings
+          use pairwise win-rate matrices — not a single composite score. All
+          scores are from the published paper (Table 2).
         </p>
 
-        <h3 className="text-sm font-semibold text-accent-cyan mb-3">
-          Video Quality ({VQ_DIMENSIONS.length} dimensions)
-        </h3>
-        <div className="grid gap-3 sm:grid-cols-2 mb-6">
-          {VQ_DIMENSIONS.map((dim) => (
-            <div key={dim.name} className="glass-card p-4">
-              <h4 className="text-sm font-semibold text-accent-cyan">
-                {dim.name}
-              </h4>
-              <p className="text-xs text-text-muted mt-1">{dim.description}</p>
-              <p className="text-xs text-text-tertiary mt-1 font-mono">
-                Evaluator: {dim.evaluator}
-              </p>
+        {CATEGORIES.map((cat) => {
+          const dims = dimsByCategory(cat);
+          const color = CATEGORY_COLORS[cat];
+          return (
+            <div key={cat} className="mb-6">
+              <h3 className="text-sm font-semibold mb-3" style={{ color }}>
+                {cat} ({dims.length} dimension{dims.length > 1 ? "s" : ""})
+              </h3>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {dims.map((dim) => (
+                  <div key={dim.name} className="glass-card p-4">
+                    <h4 className="text-sm font-semibold" style={{ color }}>
+                      {dim.name}
+                    </h4>
+                    <p className="text-xs text-text-muted mt-1">
+                      {dim.description}
+                    </p>
+                    <p className="text-xs text-text-tertiary mt-1 font-mono">
+                      Evaluator: {dim.evaluator}
+                    </p>
+                  </div>
+                ))}
+              </div>
             </div>
-          ))}
-        </div>
-
-        <h3 className="text-sm font-semibold text-violet-400 mb-3">
-          Video-Condition Consistency ({VCC_DIMENSIONS.length} dimensions)
-        </h3>
-        <div className="grid gap-3 sm:grid-cols-2">
-          {VCC_DIMENSIONS.map((dim) => (
-            <div key={dim.name} className="glass-card p-4">
-              <h4 className="text-sm font-semibold text-violet-400">
-                {dim.name}
-              </h4>
-              <p className="text-xs text-text-muted mt-1">{dim.description}</p>
-              <p className="text-xs text-text-tertiary mt-1 font-mono">
-                Evaluator: {dim.evaluator}
-              </p>
-            </div>
-          ))}
-        </div>
+          );
+        })}
       </section>
 
       {/* Agent Evaluation Methodology */}

@@ -4,11 +4,11 @@ import MermaidDiagram from "@/components/MermaidDiagram";
 import { INTENTS, TOTAL_CONVERSATIONS } from "@/data/agent";
 
 const VIDEO_STATS = {
-  models: 5,
-  dims: 16,
+  models: 4,
+  dims: 18,
   prompts: 200,
-  bestModel: "Veo 3.1",
-  bestScore: "82.1",
+  bestModel: "Kling 1.6",
+  bestScore: "Pairwise leader",
   radarPoints: [
     { metric: "TC", value: 96 },
     { metric: "MQ", value: 82 },
@@ -213,10 +213,10 @@ export default function HomePage() {
         </h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {[
-            { label: "T2V Models Evaluated", value: String(VIDEO_STATS.models), sub: "VBench 1.0 · all 16 dims", color: "var(--accent-cyan)" },
-            { label: "VBench Dimensions", value: String(VIDEO_STATS.dims), sub: "Video Quality + Condition Consistency", color: "#a78bfa" },
+            { label: "T2V Models Evaluated", value: String(VIDEO_STATS.models), sub: "VBench 2.0 · all 18 dims", color: "var(--accent-cyan)" },
+            { label: "VBench 2.0 Dimensions", value: String(VIDEO_STATS.dims), sub: "5 categories · intrinsic faithfulness", color: "#a78bfa" },
             { label: "Avg Agent Quality", value: `${AGENT_STATS.avgQuality}%`, sub: "8-dim LLM-as-judge · 5-shot", color: "var(--accent-emerald)" },
-            { label: "Best T2V Performer", value: VIDEO_STATS.bestModel, sub: `EvalForge composite ${VIDEO_STATS.bestScore}`, color: "var(--accent-amber)" },
+            { label: "Best T2V Performer", value: VIDEO_STATS.bestModel, sub: `${VIDEO_STATS.bestScore} · VBench 2.0`, color: "var(--accent-amber)" },
           ].map((card) => (
             <div key={card.label} className="glass-card p-5">
               <p className="text-sm text-[var(--text-muted)]">{card.label}</p>
