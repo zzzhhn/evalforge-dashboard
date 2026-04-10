@@ -3,6 +3,8 @@ import { getSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AnalyticsCharts } from "@/components/admin/analytics-charts";
+import { CalculateButton } from "@/components/admin/calculate-button";
+import { getLocale, t } from "@/lib/i18n/server";
 
 export default async function AnalyticsPage() {
   const session = await getSession();
@@ -12,12 +14,12 @@ export default async function AnalyticsPage() {
   ) {
     redirect("/tasks");
   }
+  const locale = await getLocale();
 
-  // Aggregate scores by model × dimension
   const scores = await prisma.score.findMany({
     where: { validity: "VALID" },
     include: {
-      dimension: { select: { code: true, nameZh: true } },
+      dimension: { select: { code: true, nameZh: true, nameEn: true } },
       evaluationItem: {
         include: {
           videoAsset: {
@@ -28,7 +30,6 @@ export default async function AnalyticsPage() {
     },
   });
 
-  // Build model → dimension → values map
   const modelDimScores: Record<string, Record<string, number[]>> = {};
   for (const score of scores) {
     const modelName = score.evaluationItem.videoAsset.model.name;
@@ -39,18 +40,17 @@ export default async function AnalyticsPage() {
     modelDimScores[modelName][dimCode].push(score.value);
   }
 
-  // Compute averages
   const models = Object.keys(modelDimScores);
   const dimensions = await prisma.dimension.findMany({
     where: { parentId: null },
     orderBy: { sortOrder: "asc" },
-    select: { code: true, nameZh: true },
+    select: { code: true, nameZh: true, nameEn: true },
   });
 
   const chartData = dimensions.map((dim) => {
     const entry: Record<string, string | number> = {
       dimension: dim.code,
-      name: dim.nameZh,
+      name: locale === "zh" ? dim.nameZh : (dim.nameEn || dim.code),
     };
     for (const model of models) {
       const values = modelDimScores[model]?.[dim.code] ?? [];
@@ -62,7 +62,6 @@ export default async function AnalyticsPage() {
     return entry;
   });
 
-  // Overall model averages
   const modelOverall = models.map((model) => {
     const allValues = Object.values(modelDimScores[model]).flat();
     const avg =
@@ -72,7 +71,6 @@ export default async function AnalyticsPage() {
     return { model, avg, count: allValues.length };
   });
 
-  // Summary stats
   const totalScores = scores.length;
   const totalItems = await prisma.evaluationItem.count({
     where: { status: "COMPLETED" },
@@ -80,12 +78,17 @@ export default async function AnalyticsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">数据分析</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">{t(locale, "admin.analytics.title")}</h1>
+        <CalculateButton />
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">总评分数</CardTitle>
+            <CardTitle className="text-sm text-muted-foreground">
+              {t(locale, "admin.analytics.totalScores")}
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">{totalScores}</div>
@@ -93,7 +96,9 @@ export default async function AnalyticsPage() {
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">已完成评测</CardTitle>
+            <CardTitle className="text-sm text-muted-foreground">
+              {t(locale, "admin.analytics.completedEvals")}
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">{totalItems}</div>
@@ -101,7 +106,9 @@ export default async function AnalyticsPage() {
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">参与模型</CardTitle>
+            <CardTitle className="text-sm text-muted-foreground">
+              {t(locale, "admin.analytics.models")}
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">{models.length}</div>
@@ -113,6 +120,7 @@ export default async function AnalyticsPage() {
         chartData={chartData}
         modelOverall={modelOverall}
         models={models}
+        locale={locale}
       />
     </div>
   );

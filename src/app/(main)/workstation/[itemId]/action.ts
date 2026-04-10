@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
+import { loadAntiCheatConfig } from "@/lib/anti-cheat-config";
 
 export interface ScoreInput {
   dimensionId: string;
@@ -31,7 +32,6 @@ export async function submitEvaluation(payload: SubmitPayload): Promise<SubmitRe
 
   const { itemId, scores, comment, watchRatio, dwellTimeMs } = payload;
 
-  // Validate item ownership
   const item = await prisma.evaluationItem.findUnique({
     where: { id: itemId },
   });
@@ -44,48 +44,112 @@ export async function submitEvaluation(payload: SubmitPayload): Promise<SubmitRe
     return { success: false, error: "该任务已完成" };
   }
 
-  // Validate scores: value must be 1-5, failure tags required when ≤ 2
   for (const score of scores) {
     if (score.value < 1 || score.value > 5) {
-      return { success: false, error: `分数必须在 1-5 之间` };
+      return { success: false, error: "分数必须在 1-5 之间 / Score must be 1-5" };
     }
     if (score.value <= 2 && score.failureTags.length === 0) {
-      return { success: false, error: `分数 ≤ 2 时必须选择失败标签` };
+      return { success: false, error: "分数 ≤ 2 时必须选择失败标签 / Failure tags required for score ≤ 2" };
     }
   }
 
-  // Anti-cheat checks (record events, don't block in demo)
-  const antiCheatEvents: { eventType: string; severity: string; payload: object }[] = [];
+  const acConfig = await loadAntiCheatConfig();
 
-  if (watchRatio < 0.8) {
+  if (watchRatio < acConfig.minWatchRatio) {
+    return {
+      success: false,
+      error: `请先观看至少 ${Math.round(acConfig.minWatchRatio * 100)}% 的视频 / Please watch at least ${Math.round(acConfig.minWatchRatio * 100)}% of the video`,
+    };
+  }
+
+  const videoDuration = await prisma.videoAsset.findFirst({
+    where: { evaluationItems: { some: { id: itemId } } },
+    select: { durationSec: true },
+  });
+  const durationSec = videoDuration?.durationSec ?? 6;
+  const minDwellMs = Math.max(acConfig.minDwellFloorMs, durationSec * acConfig.minDwellMultiplier * 1000);
+  if (dwellTimeMs < minDwellMs) {
+    return {
+      success: false,
+      error: "请在充分观看后再提交 / Please take sufficient time before submitting",
+    };
+  }
+
+  const antiCheatEvents: { eventType: string; severity: string; payload: object }[] = [];
+  let scoreValidity: "VALID" | "SUSPICIOUS" | "INVALID" = "VALID";
+
+  const recentScores = await prisma.score.findMany({
+    where: { userId: session.userId },
+    orderBy: { createdAt: "desc" },
+    take: acConfig.recentScoresWindow,
+    select: { value: true },
+  });
+
+  if (recentScores.length >= 10) {
+    const valueCounts = new Map<number, number>();
+    for (const s of recentScores) {
+      valueCounts.set(s.value, (valueCounts.get(s.value) ?? 0) + 1);
+    }
+    const maxCount = Math.max(...valueCounts.values());
+    const dominantRatio = maxCount / recentScores.length;
+
+    if (dominantRatio > acConfig.fixedValueThreshold) {
+      antiCheatEvents.push({
+        eventType: "fixed_value_pattern",
+        severity: "WARNING",
+        payload: { dominantRatio, sampleSize: recentScores.length },
+      });
+      scoreValidity = "SUSPICIOUS";
+    }
+
+    const mean = recentScores.reduce((sum, s) => sum + s.value, 0) / recentScores.length;
+    const variance = recentScores.reduce((sum, s) => sum + (s.value - mean) ** 2, 0) / recentScores.length;
+    const stddev = Math.sqrt(variance);
+    if (stddev < acConfig.lowVarianceThreshold) {
+      antiCheatEvents.push({
+        eventType: "low_score_variance",
+        severity: "WARNING",
+        payload: { stddev, mean, sampleSize: recentScores.length },
+      });
+      scoreValidity = "SUSPICIOUS";
+    }
+  }
+
+  const oneHourAgo = new Date(Date.now() - 3600_000);
+  const recentSubmitCount = await prisma.evaluationItem.count({
+    where: {
+      assignedToId: session.userId,
+      status: "COMPLETED",
+      completedAt: { gte: oneHourAgo },
+    },
+  });
+  if (recentSubmitCount > acConfig.maxSubmitsPerHour) {
+    await prisma.antiCheatEvent.create({
+      data: {
+        evaluationItemId: itemId,
+        userId: session.userId,
+        eventType: "high_frequency_submit",
+        severity: "CRITICAL",
+        payload: { submitsInLastHour: recentSubmitCount },
+        watchRatio,
+        dwellTimeMs,
+      },
+    });
+    return {
+      success: false,
+      error: "提交频率过高，请稍后再试 / Too many submissions, please wait",
+    };
+  }
+
+  if (watchRatio < 0.9) {
     antiCheatEvents.push({
       eventType: "low_watch_ratio",
-      severity: watchRatio < 0.3 ? "CRITICAL" : "WARNING",
+      severity: watchRatio < acConfig.minWatchRatio + 0.05 ? "WARNING" : "INFO",
       payload: { watchRatio },
     });
   }
 
-  if (dwellTimeMs < 5000) {
-    antiCheatEvents.push({
-      eventType: "rapid_submit",
-      severity: dwellTimeMs < 2000 ? "CRITICAL" : "WARNING",
-      payload: { dwellTimeMs },
-    });
-  }
-
-  // Check for all-same-value pattern
-  const uniqueValues = new Set(scores.map((s) => s.value));
-  if (scores.length >= 3 && uniqueValues.size === 1) {
-    antiCheatEvents.push({
-      eventType: "fixed_value",
-      severity: "WARNING",
-      payload: { value: scores[0].value, dimensionCount: scores.length },
-    });
-  }
-
-  // Write everything in a transaction
   await prisma.$transaction(async (tx) => {
-    // Create scores
     await tx.score.createMany({
       data: scores.map((s) => ({
         evaluationItemId: itemId,
@@ -94,10 +158,10 @@ export async function submitEvaluation(payload: SubmitPayload): Promise<SubmitRe
         value: s.value,
         failureTags: s.failureTags,
         comment: comment || null,
+        validity: scoreValidity,
       })),
     });
 
-    // Update evaluation item status
     await tx.evaluationItem.update({
       where: { id: itemId },
       data: {
@@ -107,7 +171,6 @@ export async function submitEvaluation(payload: SubmitPayload): Promise<SubmitRe
       },
     });
 
-    // Record anti-cheat events
     if (antiCheatEvents.length > 0) {
       await tx.antiCheatEvent.createMany({
         data: antiCheatEvents.map((e) => ({
@@ -123,7 +186,6 @@ export async function submitEvaluation(payload: SubmitPayload): Promise<SubmitRe
     }
   });
 
-  // Find next item
   const nextItem = await prisma.evaluationItem.findFirst({
     where: {
       assignedToId: session.userId,

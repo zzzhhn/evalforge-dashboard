@@ -1,24 +1,38 @@
 "use client";
 
+import { useState } from "react";
 import { useActionState } from "react";
 import { loginAction, type LoginState } from "./action";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useLocale } from "@/lib/i18n/context";
 
 const initialState: LoginState = {};
 
 export default function LoginPage() {
   const [state, formAction, isPending] = useActionState(loginAction, initialState);
+  const { locale, setLocale, t } = useLocale();
+  const [showPassword, setShowPassword] = useState(false);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background">
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl">EvalForge</CardTitle>
+          <div className="flex justify-end">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setLocale(locale === "zh" ? "en" : "zh")}
+              className="text-xs font-mono"
+            >
+              {locale === "zh" ? "EN" : "中"}
+            </Button>
+          </div>
+          <CardTitle className="text-2xl">{t("app.name")}</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Video Evaluation Platform
+            {t("app.subtitle")}
           </p>
         </CardHeader>
         <CardContent>
@@ -30,7 +44,7 @@ export default function LoginPage() {
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="email">邮箱 / Email</Label>
+              <Label htmlFor="email">{t("auth.email")}</Label>
               <Input
                 id="email"
                 name="email"
@@ -42,18 +56,30 @@ export default function LoginPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password">密码 / Password</Label>
-              <Input
-                id="password"
-                name="password"
-                type="password"
-                required
-                autoComplete="current-password"
-              />
+              <Label htmlFor="password">{t("auth.password")}</Label>
+              <div className="relative">
+                <Input
+                  id="password"
+                  name="password"
+                  type={showPassword ? "text" : "password"}
+                  required
+                  autoComplete="current-password"
+                  className="pr-16"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {showPassword
+                    ? (locale === "zh" ? "隐藏" : "Hide")
+                    : (locale === "zh" ? "显示" : "Show")}
+                </button>
+              </div>
             </div>
 
             <Button type="submit" className="w-full" disabled={isPending}>
-              {isPending ? "登录中…" : "登录 / Sign In"}
+              {isPending ? t("auth.signingIn") : t("auth.signIn")}
             </Button>
           </form>
         </CardContent>

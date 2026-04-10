@@ -116,8 +116,9 @@ model Dimension {
 
   createdAt   DateTime @default(now()) @map("created_at")
 
-  scores      Score[]
-  failureTags FailureTag[]
+  scores          Score[]
+  failureTags     FailureTag[]
+  evaluationItems EvaluationItem[]
 
   @@map("dimensions")
 }
@@ -137,6 +138,44 @@ model FailureTag {
   @@map("failure_tags")
 }
 
+// ─── Evaluation Package ──────────────────────────────
+
+enum PackageStatus {
+  DRAFT
+  PUBLISHED
+  RECALLED
+  ARCHIVED
+}
+
+model EvaluationPackage {
+  id              String        @id @default(uuid())
+  name            String
+  description     String?
+  taskType        TaskType      @map("task_type")
+  status          PackageStatus @default(DRAFT)
+  deadline        DateTime?
+  publishedAt     DateTime?     @map("published_at")
+  modelCheckpoint String?       @map("model_checkpoint")
+  videoCount      Int           @default(0) @map("video_count")
+  annotatorCount  Int           @default(0) @map("annotator_count")
+
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  videoAssets VideoAsset[]
+
+  @@map("evaluation_packages")
+}
+
+// ─── System Config ───────────────────────────────────
+
+model SystemConfig {
+  key   String @id
+  value String
+
+  @@map("system_config")
+}
+
 // ─── Video Asset ─────────────────────────────────────
 
 model VideoAsset {
@@ -145,11 +184,14 @@ model VideoAsset {
   durationSec Float?  @map("duration_sec")
   width       Int?
   height      Int?
+  fps         Float?
 
   modelId     String  @map("model_id")
   model       Model   @relation(fields: [modelId], references: [id])
   promptId    String  @map("prompt_id")
   prompt      Prompt  @relation(fields: [promptId], references: [id])
+  packageId   String? @map("package_id")
+  package     EvaluationPackage? @relation(fields: [packageId], references: [id])
 
   createdAt   DateTime @default(now()) @map("created_at")
 
@@ -172,6 +214,8 @@ model EvaluationItem {
   videoAsset   VideoAsset       @relation(fields: [videoAssetId], references: [id])
   assignedToId String           @map("assigned_to_id")
   assignedTo   User             @relation(fields: [assignedToId], references: [id])
+  dimensionId  String?          @map("dimension_id")
+  dimension    Dimension?       @relation(fields: [dimensionId], references: [id])
 
   createdAt    DateTime         @default(now()) @map("created_at")
   updatedAt    DateTime         @updatedAt @map("updated_at")

@@ -2,6 +2,7 @@
 
 import { useRef, useEffect, useCallback, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { useLocale } from "@/lib/i18n/context";
 
 export interface VideoMetrics {
   watchRatio: number;
@@ -10,24 +11,29 @@ export interface VideoMetrics {
 
 interface Props {
   url: string;
+  initialWatchedSeconds?: number[];
   onMetricsUpdate: (metrics: VideoMetrics) => void;
+  onWatchedUpdate?: (seconds: number[]) => void;
 }
 
-const SPEED_OPTIONS = [0.5, 1, 1.5, 2] as const;
+function safePlay(video: HTMLVideoElement) {
+  const p = video.play();
+  if (p) p.catch(() => {});
+}
 
-export function VideoPlayer({ url, onMetricsUpdate }: Props) {
+export function VideoPlayer({ url, initialWatchedSeconds, onMetricsUpdate, onWatchedUpdate }: Props) {
+  const { t } = useLocale();
   const videoRef = useRef<HTMLVideoElement>(null);
-  const watchedRef = useRef(new Set<number>());
+  const watchedRef = useRef(new Set<number>(initialWatchedSeconds));
   const dwellStartRef = useRef(Date.now());
-  const [speed, setSpeed] = useState(1);
   const [isPlaying, setIsPlaying] = useState(false);
 
-  // Track watched segments (1-second granularity)
   const handleTimeUpdate = useCallback(() => {
     const video = videoRef.current;
     if (!video || !video.duration) return;
 
     const second = Math.floor(video.currentTime);
+    const isNew = !watchedRef.current.has(second);
     watchedRef.current.add(second);
 
     const totalSeconds = Math.ceil(video.duration);
@@ -38,47 +44,65 @@ export function VideoPlayer({ url, onMetricsUpdate }: Props) {
       watchRatio,
       dwellStartTime: dwellStartRef.current,
     });
-  }, [onMetricsUpdate]);
 
-  // Keyboard: Space to play/pause
+    if (isNew && onWatchedUpdate) {
+      onWatchedUpdate([...watchedRef.current]);
+    }
+  }, [onMetricsUpdate, onWatchedUpdate]);
+
+  useEffect(() => {
+    if (!initialWatchedSeconds?.length) return;
+    const video = videoRef.current;
+    if (!video) return;
+
+    let cancelled = false;
+    const emitRestored = () => {
+      if (cancelled) return;
+      const totalSeconds = Math.ceil(video.duration);
+      if (totalSeconds > 0) {
+        const watchRatio = watchedRef.current.size / totalSeconds;
+        onMetricsUpdate({ watchRatio, dwellStartTime: dwellStartRef.current });
+      }
+    };
+
+    if (video.duration) {
+      emitRestored();
+    } else {
+      video.addEventListener("loadedmetadata", emitRestored, { once: true });
+    }
+    return () => {
+      cancelled = true;
+      video.removeEventListener("loadedmetadata", emitRestored);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.code === "Space" && e.target === document.body) {
-        e.preventDefault();
-        const video = videoRef.current;
-        if (!video) return;
-        if (video.paused) {
-          video.play();
-        } else {
-          video.pause();
-        }
+      if (e.code !== "Space") return;
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      e.preventDefault();
+      const video = videoRef.current;
+      if (!video) return;
+      if (video.paused) {
+        safePlay(video);
+      } else {
+        video.pause();
       }
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
   }, []);
 
-  const togglePlay = useCallback(() => {
+  const handleReplay = useCallback(() => {
     const video = videoRef.current;
     if (!video) return;
-    if (video.paused) {
-      video.play();
-    } else {
-      video.pause();
-    }
-  }, []);
-
-  const changeSpeed = useCallback((newSpeed: number) => {
-    const video = videoRef.current;
-    if (video) {
-      video.playbackRate = newSpeed;
-    }
-    setSpeed(newSpeed);
+    video.currentTime = 0;
+    safePlay(video);
   }, []);
 
   return (
     <div className="space-y-2">
-      {/* Video element */}
       <div className="overflow-hidden rounded-lg border bg-black">
         <video
           ref={videoRef}
@@ -92,24 +116,10 @@ export function VideoPlayer({ url, onMetricsUpdate }: Props) {
         />
       </div>
 
-      {/* Custom controls row */}
-      <div className="flex items-center justify-between px-1">
-        <Button variant="ghost" size="sm" onClick={togglePlay}>
-          {isPlaying ? "⏸ 暂停" : "▶ 播放"}
+      <div className="flex items-center px-1">
+        <Button variant="ghost" size="sm" onClick={handleReplay}>
+          {t("ws.replay")}
         </Button>
-        <div className="flex items-center gap-1">
-          {SPEED_OPTIONS.map((s) => (
-            <Button
-              key={s}
-              variant={speed === s ? "default" : "ghost"}
-              size="sm"
-              className="h-7 px-2 text-xs"
-              onClick={() => changeSpeed(s)}
-            >
-              {s}x
-            </Button>
-          ))}
-        </div>
       </div>
     </div>
   );

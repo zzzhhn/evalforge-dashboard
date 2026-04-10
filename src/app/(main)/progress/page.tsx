@@ -3,10 +3,12 @@ import { getSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { getLocale, t } from "@/lib/i18n/server";
 
 export default async function ProgressPage() {
   const session = await getSession();
   if (!session) redirect("/login");
+  const locale = await getLocale();
 
   const [total, completed, scores] = await Promise.all([
     prisma.evaluationItem.count({
@@ -24,8 +26,7 @@ export default async function ProgressPage() {
   const pending = total - completed;
   const progressPct = total > 0 ? Math.round((completed / total) * 100) : 0;
 
-  // Score distribution
-  const distribution = [0, 0, 0, 0, 0]; // index 0 = score 1, etc.
+  const distribution = [0, 0, 0, 0, 0];
   for (const s of scores) {
     distribution[s.value - 1]++;
   }
@@ -33,12 +34,14 @@ export default async function ProgressPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">我的进度</h1>
+      <h1 className="text-2xl font-bold">{t(locale, "progress.title")}</h1>
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">完成率</CardTitle>
+            <CardTitle className="text-sm text-muted-foreground">
+              {t(locale, "progress.completionRate")}
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">{progressPct}%</div>
@@ -48,29 +51,38 @@ export default async function ProgressPage() {
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">已完成</CardTitle>
+            <CardTitle className="text-sm text-muted-foreground">
+              {t(locale, "progress.completed")}
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">{completed}</div>
-            <p className="text-xs text-muted-foreground">共 {total} 项任务</p>
+            <p className="text-xs text-muted-foreground">
+              {t(locale, "progress.totalTasks", { total: String(total) })}
+            </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">待完成</CardTitle>
+            <CardTitle className="text-sm text-muted-foreground">
+              {t(locale, "progress.remaining")}
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">{pending}</div>
-            <p className="text-xs text-muted-foreground">剩余任务</p>
+            <p className="text-xs text-muted-foreground">
+              {t(locale, "progress.remainingTasks")}
+            </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Score Distribution */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">评分分布</CardTitle>
+          <CardTitle className="text-base">
+            {t(locale, "progress.scoreDistribution")}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex items-end gap-4">

@@ -4,23 +4,28 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { Role } from "@prisma/client";
 import { cn } from "@/lib/utils";
+import { useLocale } from "@/lib/i18n/context";
+import type { TranslationKey } from "@/lib/i18n/translations";
 
 interface NavItem {
   href: string;
-  label: string;
+  labelKey: TranslationKey;
   icon: string;
   roles?: Role[];
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { href: "/tasks", label: "评测任务", icon: "📋" },
-  { href: "/progress", label: "我的进度", icon: "📊" },
-  { href: "/admin/samples", label: "样本管理", icon: "🎬", roles: ["ADMIN", "RESEARCHER"] },
-  { href: "/admin/analytics", label: "数据分析", icon: "📈", roles: ["ADMIN", "RESEARCHER", "REVIEWER"] },
+  { href: "/tasks", labelKey: "nav.tasks", icon: "📋", roles: ["ANNOTATOR", "VENDOR_ANNOTATOR", "RESEARCHER"] },
+  { href: "/progress", labelKey: "nav.progress", icon: "📊", roles: ["ANNOTATOR", "VENDOR_ANNOTATOR", "RESEARCHER"] },
+  { href: "/admin/samples", labelKey: "nav.samples", icon: "🎬", roles: ["ADMIN", "RESEARCHER"] },
+  { href: "/admin/annotators", labelKey: "nav.annotators", icon: "👥", roles: ["ADMIN", "RESEARCHER"] },
+  { href: "/admin/analytics", labelKey: "nav.analytics", icon: "📈", roles: ["ADMIN", "RESEARCHER", "REVIEWER"] },
+  { href: "/admin/settings", labelKey: "admin.settings.title", icon: "⚙️", roles: ["ADMIN"] },
 ];
 
 export function Sidebar({ role }: { role: Role }) {
   const pathname = usePathname();
+  const { locale, t } = useLocale();
 
   const visibleItems = NAV_ITEMS.filter(
     (item) => !item.roles || item.roles.includes(role)
@@ -29,7 +34,9 @@ export function Sidebar({ role }: { role: Role }) {
   return (
     <aside className="flex w-56 flex-col border-r bg-card">
       <div className="flex h-14 items-center border-b px-4">
-        <span className="text-sm font-semibold">EvalForge</span>
+        <span className="text-sm font-semibold">
+          {locale === "zh" ? "EvalForge 评测" : "EvalForge Eval"}
+        </span>
       </div>
       <nav className="flex-1 space-y-1 p-2">
         {visibleItems.map((item) => {
@@ -46,7 +53,7 @@ export function Sidebar({ role }: { role: Role }) {
               )}
             >
               <span>{item.icon}</span>
-              {item.label}
+              {t(item.labelKey)}
             </Link>
           );
         })}
