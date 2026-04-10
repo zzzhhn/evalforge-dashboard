@@ -1,0 +1,226 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ───────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  RESEARCHER
+  ANNOTATOR
+  VENDOR_ANNOTATOR
+  REVIEWER
+  VIEWER
+}
+
+enum TaskType {
+  T2V
+  I2V
+}
+
+enum EvaluationStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  EXPIRED
+}
+
+enum ScoreValidity {
+  VALID
+  SUSPICIOUS
+  INVALID
+}
+
+enum RiskLevel {
+  NORMAL
+  LOW_RISK
+  MEDIUM_RISK
+  HIGH_RISK
+}
+
+// ─── User ────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  name          String
+  passwordHash  String    @map("password_hash")
+  role          Role      @default(ANNOTATOR)
+  riskLevel     RiskLevel @default(NORMAL) @map("risk_level")
+
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+
+  evaluationItems EvaluationItem[]
+  scores          Score[]
+  antiCheatEvents AntiCheatEvent[]
+
+  @@map("users")
+}
+
+// ─── Model ───────────────────────────────────────────
+
+model Model {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  provider    String
+  taskType    TaskType @map("task_type")
+  description String?
+  version     Int      @default(1)
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  videoAssets VideoAsset[]
+
+  @@map("models")
+}
+
+// ─── Prompt ──────────────────────────────────────────
+
+model Prompt {
+  id          String   @id @default(uuid())
+  textZh      String   @map("text_zh")
+  textEn      String   @map("text_en")
+  taskType    TaskType @map("task_type")
+  category    String?
+  sourceImage String?  @map("source_image")
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  videoAssets VideoAsset[]
+
+  @@map("prompts")
+}
+
+// ─── Dimension (self-referential tree) ───────────────
+
+model Dimension {
+  id          String  @id @default(uuid())
+  code        String  @unique          // e.g. "D4", "D4.1"
+  nameZh      String  @map("name_zh")
+  nameEn      String  @map("name_en")
+  anchor      String?                  // anchor description
+  testPoints  Json?   @map("test_points") // string[]
+  sortOrder   Int     @default(0) @map("sort_order")
+
+  parentId    String? @map("parent_id")
+  parent      Dimension?  @relation("DimensionTree", fields: [parentId], references: [id])
+  children    Dimension[] @relation("DimensionTree")
+
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  scores      Score[]
+  failureTags FailureTag[]
+
+  @@map("dimensions")
+}
+
+// ─── Failure Tag ─────────────────────────────────────
+
+model FailureTag {
+  id          String    @id @default(uuid())
+  labelZh     String    @map("label_zh")
+  labelEn     String    @map("label_en")
+
+  dimensionId String    @map("dimension_id")
+  dimension   Dimension @relation(fields: [dimensionId], references: [id])
+
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@map("failure_tags")
+}
+
+// ─── Video Asset ─────────────────────────────────────
+
+model VideoAsset {
+  id          String  @id @default(uuid())
+  url         String
+  durationSec Float?  @map("duration_sec")
+  width       Int?
+  height      Int?
+
+  modelId     String  @map("model_id")
+  model       Model   @relation(fields: [modelId], references: [id])
+  promptId    String  @map("prompt_id")
+  prompt      Prompt  @relation(fields: [promptId], references: [id])
+
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  evaluationItems EvaluationItem[]
+
+  @@unique([modelId, promptId])
+  @@map("video_assets")
+}
+
+// ─── Evaluation Item (task assignment) ───────────────
+
+model EvaluationItem {
+  id           String           @id @default(uuid())
+  status       EvaluationStatus @default(PENDING)
+  assignedAt   DateTime?        @map("assigned_at")
+  completedAt  DateTime?        @map("completed_at")
+  dwellTimeMs  Int?             @map("dwell_time_ms")
+
+  videoAssetId String           @map("video_asset_id")
+  videoAsset   VideoAsset       @relation(fields: [videoAssetId], references: [id])
+  assignedToId String           @map("assigned_to_id")
+  assignedTo   User             @relation(fields: [assignedToId], references: [id])
+
+  createdAt    DateTime         @default(now()) @map("created_at")
+  updatedAt    DateTime         @updatedAt @map("updated_at")
+  version      Int              @default(1)
+
+  scores          Score[]
+  antiCheatEvents AntiCheatEvent[]
+
+  @@map("evaluation_items")
+}
+
+// ─── Score ───────────────────────────────────────────
+
+model Score {
+  id            String        @id @default(uuid())
+  value         Int                           // 1-5 Likert
+  failureTags   String[]      @map("failure_tags")  // tag IDs
+  comment       String?
+  validity      ScoreValidity @default(VALID)
+
+  evaluationItemId String     @map("evaluation_item_id")
+  evaluationItem   EvaluationItem @relation(fields: [evaluationItemId], references: [id])
+  dimensionId      String     @map("dimension_id")
+  dimension        Dimension  @relation(fields: [dimensionId], references: [id])
+  userId           String     @map("user_id")
+  user             User       @relation(fields: [userId], references: [id])
+
+  createdAt     DateTime      @default(now()) @map("created_at")
+
+  @@unique([evaluationItemId, dimensionId, userId])
+  @@map("scores")
+}
+
+// ─── Anti-Cheat Event ────────────────────────────────
+
+model AntiCheatEvent {
+  id              String   @id @default(uuid())
+  eventType       String   @map("event_type")    // e.g. "low_watch_ratio", "fixed_value", "rapid_submit"
+  severity        String   @default("INFO")       // INFO, WARNING, CRITICAL
+  payload         Json                             // event-specific data
+  watchRatio      Float?   @map("watch_ratio")
+  dwellTimeMs     Int?     @map("dwell_time_ms")
+
+  evaluationItemId String  @map("evaluation_item_id")
+  evaluationItem   EvaluationItem @relation(fields: [evaluationItemId], references: [id])
+  userId           String  @map("user_id")
+  user             User    @relation(fields: [userId], references: [id])
+
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@map("anti_cheat_events")
+}
