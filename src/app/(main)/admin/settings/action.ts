@@ -27,8 +27,8 @@ export async function getSystemConfigs(): Promise<ConfigEntry[]> {
 
   return configs.map((c) => ({
     key: c.key,
-    value: Number(c.value),
-    label: null,
+    value: c.value as number,
+    label: c.label,
   }));
 }
 
@@ -50,7 +50,7 @@ export async function updateSystemConfigs(
 
     await prisma.systemConfig.update({
       where: { key },
-      data: { value: String(value) },
+      data: { value },
     });
   }
 

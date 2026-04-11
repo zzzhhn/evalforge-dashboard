@@ -44,7 +44,7 @@ export default async function WorkstationPage({ params }: Props) {
       status: true,
       videoAsset: {
         select: {
-          prompt: { select: { id: true, textEn: true } },
+          prompt: { select: { id: true, externalId: true, textEn: true } },
         },
       },
       dimension: {
@@ -93,7 +93,7 @@ export default async function WorkstationPage({ params }: Props) {
     return {
       id: ai.id,
       index: idx + 1,
-      externalId: ai.videoAsset.prompt.id,
+      externalId: ai.videoAsset.prompt.externalId,
       promptPreview: ai.videoAsset.prompt.textEn.length > 60
         ? ai.videoAsset.prompt.textEn.slice(0, 60) + "..."
         : ai.videoAsset.prompt.textEn,
@@ -118,9 +118,9 @@ export default async function WorkstationPage({ params }: Props) {
   const hideModelMap = Object.fromEntries(hideModelRows.map((r) => [r.key, r.value]));
   const currentUser = await prisma.user.findUnique({
     where: { id: session.userId },
-    select: { role: true },
+    select: { accountType: true },
   });
-  const hideModel = currentUser?.role === "VENDOR_ANNOTATOR"
+  const hideModel = currentUser?.accountType === "VENDOR"
     ? Boolean(hideModelMap["display.hide_model_for_vendor"])
     : Boolean(hideModelMap["display.hide_model_for_internal"]);
 
@@ -143,7 +143,7 @@ export default async function WorkstationPage({ params }: Props) {
       item={{
         id: item.id,
         status: item.status,
-        externalId: item.videoAsset.prompt.id,
+        externalId: item.videoAsset.prompt.externalId,
         videoUrl: signed.videoUrl,
         videoDuration: item.videoAsset.durationSec,
         promptZh: item.videoAsset.prompt.textZh,

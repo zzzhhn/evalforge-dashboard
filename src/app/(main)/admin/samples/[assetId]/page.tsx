@@ -28,10 +28,9 @@ export default async function SampleDetailPage({ params }: Props) {
       prompt: true,
       evaluationItems: {
         include: {
+          dimension: { include: { parent: true } },
           assignedTo: { select: { name: true } },
-          scores: {
-            include: { dimension: { select: { code: true, nameZh: true, nameEn: true } } },
-          },
+          scores: { select: { value: true, dimensionId: true } },
         },
       },
     },
@@ -49,12 +48,14 @@ export default async function SampleDetailPage({ params }: Props) {
 
   return (
     <div className="space-y-6">
+      {/* Back link */}
       <Link href="/admin/samples">
         <Button variant="ghost" size="sm">
           ← {t(locale, "admin.samples.title")}
         </Button>
       </Link>
 
+      {/* Prompt info */}
       <div className="flex gap-4">
         {isI2V && signed.sourceImage && (
           <img
@@ -85,8 +86,10 @@ export default async function SampleDetailPage({ params }: Props) {
         </div>
       </div>
 
+      {/* Video player (read-only, no scoring) */}
       <SampleDetailVideo url={signed.videoUrl} />
 
+      {/* Evaluation status */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">
@@ -96,9 +99,11 @@ export default async function SampleDetailPage({ params }: Props) {
         <CardContent>
           <div className="space-y-3">
             {asset.evaluationItems.map((item) => {
-              const avgScore = item.scores.length > 0
-                ? (item.scores.reduce((sum, s) => sum + s.value, 0) / item.scores.length).toFixed(1)
+              const dimName = locale === "zh" ? item.dimension.nameZh : item.dimension.nameEn;
+              const parentName = item.dimension.parent
+                ? (locale === "zh" ? item.dimension.parent.nameZh : item.dimension.parent.nameEn)
                 : null;
+              const score = item.scores[0];
 
               return (
                 <div
@@ -108,12 +113,12 @@ export default async function SampleDetailPage({ params }: Props) {
                   <div>
                     <span className="text-sm font-medium">{item.assignedTo.name}</span>
                     <span className="ml-2 text-xs text-muted-foreground">
-                      {item.scores.length} {locale === "zh" ? "个评分" : "scores"}
+                      {parentName && `${parentName} › `}{dimName}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    {avgScore ? (
-                      <Badge variant="default">{avgScore}/5</Badge>
+                    {score ? (
+                      <Badge variant="default">{score.value}/5</Badge>
                     ) : (
                       <Badge variant="outline">
                         {locale === "zh" ? "待评测" : "Pending"}

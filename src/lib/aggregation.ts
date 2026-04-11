@@ -7,6 +7,11 @@ export interface AggregationResult {
   calculatedAt: string;
 }
 
+/**
+ * Calculate score aggregations: item-level, dimension-level, and model-level.
+ * Only uses VALID scores for trusted statistics.
+ * Results are logged and can be extended to write to aggregate tables.
+ */
 export async function calculateAggregations(): Promise<AggregationResult> {
   const validScores = await prisma.score.findMany({
     where: { validity: "VALID" },
@@ -22,7 +27,7 @@ export async function calculateAggregations(): Promise<AggregationResult> {
     },
   });
 
-  // Item-level aggregation
+  // ─── Item-level aggregation ───
   const itemScores = new Map<string, number[]>();
   for (const s of validScores) {
     const key = s.evaluationItemId;
@@ -36,7 +41,7 @@ export async function calculateAggregations(): Promise<AggregationResult> {
     return { itemId, mean, stddev: Math.sqrt(variance), count: values.length };
   });
 
-  // Dimension-level aggregation
+  // ─── Dimension-level aggregation ───
   const dimScores = new Map<string, number[]>();
   for (const s of validScores) {
     const code = s.dimension.code;
@@ -49,7 +54,7 @@ export async function calculateAggregations(): Promise<AggregationResult> {
     return { code, mean: Math.round(mean * 100) / 100, count: values.length };
   });
 
-  // Model-level aggregation
+  // ─── Model-level aggregation ───
   const modelScores = new Map<string, Map<string, number[]>>();
   for (const s of validScores) {
     const model = s.evaluationItem.videoAsset.model.name;
@@ -74,6 +79,11 @@ export async function calculateAggregations(): Promise<AggregationResult> {
       totalScores: allValues.length,
     };
   });
+
+  console.log(`[Aggregation] ${new Date().toISOString()}`);
+  console.log(`  Items: ${itemAggregates.length}`);
+  console.log(`  Dimensions: ${dimensionAggregates.length}`);
+  console.log(`  Models: ${modelAggregates.map((m) => `${m.model}=${m.overall}`).join(", ")}`);
 
   return {
     itemCount: itemAggregates.length,

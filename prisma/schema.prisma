@@ -42,15 +42,21 @@ enum RiskLevel {
   HIGH_RISK
 }
 
+enum AccountType {
+  INTERNAL
+  VENDOR
+}
+
 // ─── User ────────────────────────────────────────────
 
 model User {
-  id            String    @id @default(uuid())
-  email         String    @unique
+  id            String      @id @default(uuid())
+  email         String      @unique
   name          String
-  passwordHash  String    @map("password_hash")
-  role          Role      @default(ANNOTATOR)
-  riskLevel     RiskLevel @default(NORMAL) @map("risk_level")
+  passwordHash  String      @map("password_hash")
+  role          Role        @default(ANNOTATOR)
+  accountType   AccountType @default(INTERNAL) @map("account_type")
+  riskLevel     RiskLevel   @default(NORMAL) @map("risk_level")
 
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
@@ -84,12 +90,14 @@ model Model {
 // ─── Prompt ──────────────────────────────────────────
 
 model Prompt {
-  id          String   @id @default(uuid())
-  textZh      String   @map("text_zh")
-  textEn      String   @map("text_en")
-  taskType    TaskType @map("task_type")
-  category    String?
-  sourceImage String?  @map("source_image")
+  id              String   @id @default(uuid())
+  externalId      String   @unique @map("external_id")  // e.g. "T2V_001", "I2V_001"
+  textZh          String   @map("text_zh")
+  textEn          String   @map("text_en")
+  taskType        TaskType @map("task_type")
+  category        String?
+  sourceImage     String?  @map("source_image")          // I2V start frame URL
+  sourceImagePrompt String? @map("source_image_prompt")  // I2V start frame generation prompt
 
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
@@ -149,15 +157,16 @@ enum PackageStatus {
 
 model EvaluationPackage {
   id              String        @id @default(uuid())
-  name            String
-  description     String?
+  name            String        @unique                // e.g. "T2V_200_5_20260409"
   taskType        TaskType      @map("task_type")
+  videoCount      Int           @map("video_count")
+  annotatorCount  Int           @map("annotator_count")
   status          PackageStatus @default(DRAFT)
-  deadline        DateTime?
   publishedAt     DateTime?     @map("published_at")
-  modelCheckpoint String?       @map("model_checkpoint")
-  videoCount      Int           @default(0) @map("video_count")
-  annotatorCount  Int           @default(0) @map("annotator_count")
+  deadline        DateTime?                            // submission deadline
+  recalledAt      DateTime?     @map("recalled_at")
+  modelCheckpoint String?       @map("model_checkpoint") // e.g. "bach-v2.1-20260408"
+  description     String?
 
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime      @updatedAt @map("updated_at")
@@ -167,13 +176,16 @@ model EvaluationPackage {
   @@map("evaluation_packages")
 }
 
-// ─── System Config ───────────────────────────────────
+// ─── System Config (admin-tunable parameters) ───────
 
 model SystemConfig {
-  key   String @id
-  value String
+  id        String   @id @default(uuid())
+  key       String   @unique                    // e.g. "anti_cheat.min_watch_ratio"
+  value     Json                                // typed value
+  label     String?                             // human-readable description
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  @@map("system_config")
+  @@map("system_configs")
 }
 
 // ─── Video Asset ─────────────────────────────────────
@@ -184,7 +196,7 @@ model VideoAsset {
   durationSec Float?  @map("duration_sec")
   width       Int?
   height      Int?
-  fps         Float?
+  fps         Int?
 
   modelId     String  @map("model_id")
   model       Model   @relation(fields: [modelId], references: [id])
@@ -214,8 +226,8 @@ model EvaluationItem {
   videoAsset   VideoAsset       @relation(fields: [videoAssetId], references: [id])
   assignedToId String           @map("assigned_to_id")
   assignedTo   User             @relation(fields: [assignedToId], references: [id])
-  dimensionId  String?          @map("dimension_id")
-  dimension    Dimension?       @relation(fields: [dimensionId], references: [id])
+  dimensionId  String           @map("dimension_id")
+  dimension    Dimension        @relation(fields: [dimensionId], references: [id])
 
   createdAt    DateTime         @default(now()) @map("created_at")
   updatedAt    DateTime         @updatedAt @map("updated_at")

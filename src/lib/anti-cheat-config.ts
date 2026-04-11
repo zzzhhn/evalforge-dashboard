@@ -39,7 +39,7 @@ export async function loadAntiCheatConfig(): Promise<AntiCheatConfig> {
   for (const row of rows) {
     const field = KEY_MAP[row.key];
     if (field) {
-      config[field] = Number(row.value);
+      config[field] = row.value as number;
     }
   }
   return config;

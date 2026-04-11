@@ -43,7 +43,7 @@ export default async function PackageDetailPage({ params }: Props) {
       id: va.id,
       promptZh: va.prompt.textZh,
       promptEn: va.prompt.textEn,
-      externalId: va.prompt.id,
+      externalId: va.prompt.externalId,
       modelName: va.model.name,
       taskType: va.model.taskType,
       durationSec: va.durationSec,

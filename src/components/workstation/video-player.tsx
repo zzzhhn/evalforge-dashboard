@@ -11,11 +11,14 @@ export interface VideoMetrics {
 
 interface Props {
   url: string;
+  /** Pre-populated watched seconds from a previous visit */
   initialWatchedSeconds?: number[];
   onMetricsUpdate: (metrics: VideoMetrics) => void;
+  /** Called whenever the watched-seconds set changes, for external persistence */
   onWatchedUpdate?: (seconds: number[]) => void;
 }
 
+/** Safely call video.play() — swallow AbortError from navigation/unmount */
 function safePlay(video: HTMLVideoElement) {
   const p = video.play();
   if (p) p.catch(() => {});
@@ -28,6 +31,7 @@ export function VideoPlayer({ url, initialWatchedSeconds, onMetricsUpdate, onWat
   const dwellStartRef = useRef(Date.now());
   const [isPlaying, setIsPlaying] = useState(false);
 
+  // Track watched segments (1-second granularity)
   const handleTimeUpdate = useCallback(() => {
     const video = videoRef.current;
     if (!video || !video.duration) return;
@@ -50,6 +54,7 @@ export function VideoPlayer({ url, initialWatchedSeconds, onMetricsUpdate, onWat
     }
   }, [onMetricsUpdate, onWatchedUpdate]);
 
+  // On mount: if we have restored watched seconds, emit initial metrics once video metadata loads
   useEffect(() => {
     if (!initialWatchedSeconds?.length) return;
     const video = videoRef.current;
@@ -74,8 +79,9 @@ export function VideoPlayer({ url, initialWatchedSeconds, onMetricsUpdate, onWat
       cancelled = true;
       video.removeEventListener("loadedmetadata", emitRestored);
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- only on mount
 
+  // Keyboard: Space to play/pause (skip when typing in input/textarea)
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.code !== "Space") return;
@@ -103,6 +109,7 @@ export function VideoPlayer({ url, initialWatchedSeconds, onMetricsUpdate, onWat
 
   return (
     <div className="space-y-2">
+      {/* Video element */}
       <div className="overflow-hidden rounded-lg border bg-black">
         <video
           ref={videoRef}
@@ -116,6 +123,7 @@ export function VideoPlayer({ url, initialWatchedSeconds, onMetricsUpdate, onWat
         />
       </div>
 
+      {/* Replay button */}
       <div className="flex items-center px-1">
         <Button variant="ghost" size="sm" onClick={handleReplay}>
           {t("ws.replay")}

@@ -114,6 +114,24 @@ export function AnnotatorDetailClient({ userName, scores, antiCheatEvents = [], 
   const handleExportXlsx = useCallback(() => {
     const data = buildExportData();
     const ws = XLSX.utils.json_to_sheet(data);
+    const range = XLSX.utils.decode_range(ws["!ref"] ?? "A1");
+    for (let r = range.s.r; r <= range.e.r; r++) {
+      for (let c = range.s.c; c <= range.e.c; c++) {
+        const addr = XLSX.utils.encode_cell({ r, c });
+        const cell = ws[addr];
+        if (!cell) continue;
+        const val = String(cell.v ?? "");
+        const hasChinese = /[\u4e00-\u9fff]/.test(val);
+        cell.s = {
+          font: { name: hasChinese ? "SimSun" : "Times New Roman", sz: 11 },
+        };
+      }
+    }
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      const addr = XLSX.utils.encode_cell({ r: 0, c });
+      const cell = ws[addr];
+      if (cell?.s) cell.s.font = { ...cell.s.font, bold: true };
+    }
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, userName);
     XLSX.writeFile(wb, `${userName}_scores.xlsx`, { bookSST: true });

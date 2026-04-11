@@ -92,6 +92,7 @@ export function ScoringPanel({ dimension, onSubmit, submitting }: Props) {
 
   return (
     <div className="space-y-4">
+      {/* Likert Scale */}
       <div className="rounded-lg border bg-card p-4 space-y-3">
         <div className="flex items-center justify-center gap-3">
           {[1, 2, 3, 4, 5].map((value) => {
@@ -120,6 +121,7 @@ export function ScoringPanel({ dimension, onSubmit, submitting }: Props) {
           ))}
         </div>
 
+        {/* Failure tags (conditional, score <= 2) */}
         {needsTags && (
           <div className="animate-in slide-in-from-top-2 space-y-2 rounded-md border border-destructive/30 bg-destructive/5 p-3">
             <p className="text-xs font-medium text-destructive">
@@ -148,6 +150,7 @@ export function ScoringPanel({ dimension, onSubmit, submitting }: Props) {
         )}
       </div>
 
+      {/* Comment + Submit */}
       <div className="space-y-3">
         <Input
           placeholder={t("ws.comment")}

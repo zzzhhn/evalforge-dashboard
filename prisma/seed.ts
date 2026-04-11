@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { PrismaClient, Role, TaskType } from "@prisma/client";
+import { PrismaClient, Role, TaskType, AccountType } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { hash } from "bcryptjs";
 
@@ -21,11 +21,17 @@ async function main() {
       name: "Admin",
       passwordHash: adminPassword,
       role: Role.ADMIN,
+      accountType: AccountType.INTERNAL,
     },
   });
 
-  const annotators = await Promise.all(
-    ["Alice", "Bob", "Charlie", "Diana", "Eve"].map((name) =>
+  // Internal annotators
+  const internalNames = ["Alice", "Bob", "Charlie"];
+  // Vendor annotators
+  const vendorNames = ["Diana", "Eve"];
+
+  const annotators = await Promise.all([
+    ...internalNames.map((name) =>
       prisma.user.upsert({
         where: { email: `${name.toLowerCase()}@evalforge.dev` },
         update: {},
@@ -34,10 +40,24 @@ async function main() {
           name,
           passwordHash: annotatorPassword,
           role: Role.ANNOTATOR,
+          accountType: AccountType.INTERNAL,
         },
       })
-    )
-  );
+    ),
+    ...vendorNames.map((name) =>
+      prisma.user.upsert({
+        where: { email: `${name.toLowerCase()}@evalforge.dev` },
+        update: {},
+        create: {
+          email: `${name.toLowerCase()}@evalforge.dev`,
+          name,
+          passwordHash: annotatorPassword,
+          role: Role.VENDOR_ANNOTATOR,
+          accountType: AccountType.VENDOR,
+        },
+      })
+    ),
+  ]);
 
   // ─── Models ──────────────────────────────────────
   const modelData = [
@@ -112,6 +132,12 @@ async function main() {
   );
 
   // ─── Failure Tags ────────────────────────────────
+  // Clean up before re-seeding to avoid duplicates
+  await prisma.antiCheatEvent.deleteMany({});
+  await prisma.score.deleteMany({});
+  await prisma.evaluationItem.deleteMany({});
+  await prisma.failureTag.deleteMany({});
+
   const failureTagData: { labelZh: string; labelEn: string; dimCode: string }[] = [
     { labelZh: "模糊", labelEn: "Blurry", dimCode: "D1" },
     { labelZh: "色彩失真", labelEn: "Color distortion", dimCode: "D1" },
@@ -145,21 +171,25 @@ async function main() {
   // ─── Prompts ─────────────────────────────────────
   const promptData = [
     {
+      externalId: "T2V_001",
       textZh: "一只金毛犬在海滩上奔跑",
       textEn: "A golden retriever running on a beach",
       taskType: TaskType.T2V,
     },
     {
+      externalId: "T2V_002",
       textZh: "城市天际线的延时摄影，从白天到夜晚",
       textEn: "Time-lapse of a city skyline from day to night",
       taskType: TaskType.T2V,
     },
     {
+      externalId: "T2V_003",
       textZh: "一位女士在厨房里做蛋糕",
       textEn: "A woman baking a cake in a kitchen",
       taskType: TaskType.T2V,
     },
     {
+      externalId: "I2V_001",
       textZh: "让图中的人物开始跳舞",
       textEn: "Make the person in the image start dancing",
       taskType: TaskType.I2V,
@@ -168,11 +198,16 @@ async function main() {
   ];
 
   const prompts = await Promise.all(
-    promptData.map((p) => prisma.prompt.create({ data: p }))
+    promptData.map((p) =>
+      prisma.prompt.upsert({
+        where: { externalId: p.externalId },
+        update: {},
+        create: p,
+      })
+    )
   );
 
   // ─── Video Assets (public sample videos) ──────────
-  // Google-hosted sample videos (CC-licensed, publicly available)
   const sampleVideos = [
     "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
     "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
@@ -187,12 +222,15 @@ async function main() {
       (p) => p.taskType === model.taskType
     );
     for (const prompt of matchingPrompts) {
-      const asset = await prisma.videoAsset.create({
-        data: {
+      const asset = await prisma.videoAsset.upsert({
+        where: { modelId_promptId: { modelId: model.id, promptId: prompt.id } },
+        update: {},
+        create: {
           url: sampleVideos[videoIndex % sampleVideos.length],
           durationSec: 6.0,
           width: 1280,
           height: 720,
+          fps: 30,
           modelId: model.id,
           promptId: prompt.id,
         },
@@ -203,19 +241,45 @@ async function main() {
   }
 
   // ─── Evaluation Items (assign to annotators) ─────
+  // Each video-dimension pair gets 3 annotators (redundancy for IAA)
+  const dimensionIds = dimensions.map((d) => d.id);
   let assignIndex = 0;
   for (const asset of videoAssets) {
-    // Each video gets 3 annotators (redundancy for IAA)
+    // Assign one dimension per video for the demo
+    const dimensionId = dimensionIds[videoIndex % dimensionIds.length];
     for (let r = 0; r < 3; r++) {
       const annotator = annotators[assignIndex % annotators.length];
       await prisma.evaluationItem.create({
         data: {
           videoAssetId: asset.id,
+          dimensionId,
           assignedToId: annotator.id,
         },
       });
       assignIndex++;
     }
+    videoIndex++;
+  }
+
+  // ─── System Config (anti-cheat defaults) ─────────
+  const defaultConfigs = [
+    { key: "anti_cheat.min_watch_ratio", value: 0.7, label: "Minimum video watch ratio before submission" },
+    { key: "anti_cheat.min_dwell_multiplier", value: 0.6, label: "Dwell time multiplier (durationSec × multiplier × 1000 = minDwellMs)" },
+    { key: "anti_cheat.min_dwell_floor_ms", value: 5000, label: "Minimum dwell time floor (ms)" },
+    { key: "anti_cheat.max_submits_per_hour", value: 60, label: "Maximum submissions per hour before flagging" },
+    { key: "anti_cheat.fixed_value_threshold", value: 0.8, label: "Dominant value ratio threshold for fixed-value detection" },
+    { key: "anti_cheat.low_variance_threshold", value: 0.5, label: "Score stddev threshold for low-variance detection" },
+    { key: "anti_cheat.recent_scores_window", value: 20, label: "Number of recent scores for pattern detection" },
+    { key: "display.hide_model_for_internal", value: 0, label: "Hide model name for internal annotators (0=show, 1=hide)" },
+    { key: "display.hide_model_for_vendor", value: 0, label: "Hide model name for vendor annotators (0=show, 1=hide)" },
+  ];
+
+  for (const cfg of defaultConfigs) {
+    await prisma.systemConfig.upsert({
+      where: { key: cfg.key },
+      update: {},
+      create: { key: cfg.key, value: cfg.value, label: cfg.label },
+    });
   }
 
   console.log("✓ Seed complete:");

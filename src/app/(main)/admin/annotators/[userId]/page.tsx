@@ -32,7 +32,7 @@ export default async function AnnotatorDetailPage({ params }: Props) {
         include: {
           videoAsset: {
             include: {
-              prompt: { select: { id: true, textZh: true, textEn: true } },
+              prompt: { select: { id: true, externalId: true, textZh: true, textEn: true } },
               model: { select: { name: true, taskType: true } },
             },
           },
@@ -51,7 +51,7 @@ export default async function AnnotatorDetailPage({ params }: Props) {
         include: {
           videoAsset: {
             include: {
-              prompt: { select: { id: true } },
+              prompt: { select: { id: true, externalId: true } },
             },
           },
         },
@@ -95,7 +95,7 @@ export default async function AnnotatorDetailPage({ params }: Props) {
     dimensionCode: s.dimension.code,
     dimensionNameZh: s.dimension.nameZh,
     dimensionNameEn: s.dimension.nameEn,
-    videoExternalId: s.evaluationItem.videoAsset.prompt.id,
+    videoExternalId: s.evaluationItem.videoAsset.prompt.externalId,
     promptZh: s.evaluationItem.videoAsset.prompt.textZh,
     promptEn: s.evaluationItem.videoAsset.prompt.textEn,
     modelName: s.evaluationItem.videoAsset.model.name,
@@ -109,7 +109,7 @@ export default async function AnnotatorDetailPage({ params }: Props) {
     payload: e.payload as Record<string, unknown>,
     watchRatio: e.watchRatio,
     dwellTimeMs: e.dwellTimeMs,
-    videoExternalId: e.evaluationItem.videoAsset.prompt.id,
+    videoExternalId: e.evaluationItem.videoAsset.prompt.externalId,
     createdAt: e.createdAt.toISOString(),
   }));
 

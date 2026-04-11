@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useLocale } from "@/lib/i18n/context";
 import { updateSystemConfigs, type ConfigEntry } from "@/app/(main)/admin/settings/action";
 
+// Human-readable labels for each config key
 const CONFIG_LABELS: Record<string, { zh: string; en: string; unit: string; step: number; min: number; max: number }> = {
   "anti_cheat.min_watch_ratio": {
     zh: "最低视频观看比例",
@@ -65,6 +66,7 @@ const CONFIG_LABELS: Record<string, { zh: string; en: string; unit: string; step
   },
 };
 
+// Toggle config metadata (display.* keys use 0/1 as boolean)
 const TOGGLE_LABELS: Record<string, { zhLabel: string; enLabel: string }> = {
   "display.hide_model_for_internal": {
     zhLabel: "对内部标注员隐藏模型名称",

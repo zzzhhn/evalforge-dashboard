@@ -53,8 +53,10 @@ export async function submitEvaluation(payload: SubmitPayload): Promise<SubmitRe
     }
   }
 
+  // ─── Load configurable anti-cheat parameters ───
   const acConfig = await loadAntiCheatConfig();
 
+  // ─── Anti-cheat: enforce minimum watch ratio ───
   if (watchRatio < acConfig.minWatchRatio) {
     return {
       success: false,
@@ -62,6 +64,7 @@ export async function submitEvaluation(payload: SubmitPayload): Promise<SubmitRe
     };
   }
 
+  // ─── Anti-cheat: enforce minimum dwell time ───
   const videoDuration = await prisma.videoAsset.findFirst({
     where: { evaluationItems: { some: { id: itemId } } },
     select: { durationSec: true },
@@ -75,6 +78,7 @@ export async function submitEvaluation(payload: SubmitPayload): Promise<SubmitRe
     };
   }
 
+  // ─── Anti-cheat: detect fixed-value pattern ───
   const antiCheatEvents: { eventType: string; severity: string; payload: object }[] = [];
   let scoreValidity: "VALID" | "SUSPICIOUS" | "INVALID" = "VALID";
 
@@ -115,6 +119,7 @@ export async function submitEvaluation(payload: SubmitPayload): Promise<SubmitRe
     }
   }
 
+  // ─── Anti-cheat: high-frequency submission check ───
   const oneHourAgo = new Date(Date.now() - 3600_000);
   const recentSubmitCount = await prisma.evaluationItem.count({
     where: {
