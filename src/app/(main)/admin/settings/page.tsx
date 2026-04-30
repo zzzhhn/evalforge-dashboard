@@ -13,7 +13,7 @@ export default async function SettingsPage() {
   const configs = await getSystemConfigs();
 
   return (
-    <div className="space-y-6">
+    <div className="h-full space-y-6 overflow-y-auto">
       <div>
         <h1 className="text-2xl font-bold">{t(locale, "admin.settings.title")}</h1>
       </div>

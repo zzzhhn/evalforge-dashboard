@@ -19,26 +19,168 @@ export default async function PackageDetailPage({ params }: Props) {
   }
   const locale = await getLocale();
 
+  // EvaluationItem.packageId is the single source of truth for what
+  // belongs to this package (Dataset-first architecture). We derive the
+  // asset list from the items directly — this works for both the legacy
+  // 1:1 VideoAsset.packageId FK and for Dataset-reused packages.
   const pkg = await prisma.evaluationPackage.findUnique({
     where: { id: packageId },
     include: {
-      videoAssets: {
-        include: {
-          model: true,
-          prompt: true,
-          evaluationItems: {
-            select: { status: true },
+      evaluationItems: {
+        where: { packageId },
+        select: {
+          status: true,
+          assignedToId: true,
+          videoAssetId: true,
+          videoAsset: {
+            include: { model: true, prompt: true },
           },
         },
-        orderBy: { createdAt: "asc" },
       },
     },
   });
 
-  if (!pkg) notFound();
+  if (!pkg || pkg.deletedAt) notFound();
 
-  const assets = pkg.videoAssets.map((va) => {
-    const completed = va.evaluationItems.filter((i) => i.status === "COMPLETED").length;
+  type AssetRow = (typeof pkg.evaluationItems)[number]["videoAsset"];
+  const assetMap = new Map<string, AssetRow>();
+  for (const item of pkg.evaluationItems) {
+    if (!assetMap.has(item.videoAssetId)) {
+      assetMap.set(item.videoAssetId, item.videoAsset);
+    }
+  }
+  const allAssets = [...assetMap.values()].sort(
+    (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+  );
+
+  const itemsForPackage = pkg.evaluationItems;
+
+  const annotatorMap = new Map<string, {
+    assigned: number;
+    completed: number;
+    expired: number;
+  }>();
+  for (const item of itemsForPackage) {
+    const uid = item.assignedToId;
+    const entry = annotatorMap.get(uid) ?? { assigned: 0, completed: 0, expired: 0 };
+    entry.assigned += 1;
+    if (item.status === "COMPLETED") entry.completed += 1;
+    if (item.status === "EXPIRED") entry.expired += 1;
+    annotatorMap.set(uid, entry);
+  }
+
+  const annotatorIds = [...annotatorMap.keys()];
+
+  // Fetch user names and score aggregates in parallel
+  const [users, scoreAggs, suspiciousStats] = await Promise.all([
+    annotatorIds.length > 0
+      ? prisma.user.findMany({
+          where: { id: { in: annotatorIds } },
+          select: {
+            id: true,
+            name: true,
+            accountType: true,
+            riskLevel: true,
+            groupMemberships: {
+              select: {
+                isAdmin: true,
+                group: { select: { name: true } },
+              },
+            },
+            capabilityAssessments: {
+              orderBy: { assessmentDate: "desc" },
+              take: 1,
+              select: {
+                accuracy: true,
+                consistency: true,
+                coverage: true,
+                detailOriented: true,
+                speed: true,
+                compositeScore: true,
+              },
+            },
+          },
+        })
+      : Promise.resolve([]),
+    annotatorIds.length > 0
+      ? prisma.score.groupBy({
+          by: ["userId"],
+          where: {
+            // Prefer explicit packageId on the item; fall back to legacy
+            // videoAsset.packageId for rows written before the migration.
+            evaluationItem: {
+              packageId,
+            },
+            userId: { in: annotatorIds },
+          },
+          _avg: { value: true },
+          _count: { value: true },
+          _max: { createdAt: true },
+        })
+      : Promise.resolve([]),
+    annotatorIds.length > 0
+      ? prisma.score.groupBy({
+          by: ["userId"],
+          where: {
+            evaluationItem: {
+              packageId,
+            },
+            userId: { in: annotatorIds },
+            validity: "SUSPICIOUS",
+          },
+          _count: { _all: true },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const userMap = new Map(users.map((u) => [u.id, u]));
+  const aggMap = new Map(scoreAggs.map((a) => [a.userId, a]));
+  const suspiciousMap = new Map(
+    suspiciousStats.map((s) => [s.userId, s._count._all]),
+  );
+
+  // Also fetch emails for the credential display
+  const userEmails = await prisma.user.findMany({
+    where: { id: { in: annotatorIds } },
+    select: { id: true, email: true },
+  });
+  const emailMap = new Map(userEmails.map((u) => [u.id, u.email]));
+
+  const annotatorStats = annotatorIds.map((uid) => {
+    const user = userMap.get(uid);
+    const counts = annotatorMap.get(uid)!;
+    const agg = aggMap.get(uid);
+    const primaryMembership = user?.groupMemberships[0];
+    return {
+      userId: uid,
+      name: user?.name ?? uid,
+      email: emailMap.get(uid) ?? "",
+      accountType: user?.accountType ?? "INTERNAL",
+      assigned: counts.assigned,
+      completed: counts.completed,
+      scoreCount: agg?._count?.value ?? 0,
+      avgScore: agg?._avg?.value ?? null,
+      lastSubmittedAt: agg?._max?.createdAt?.toISOString() ?? null,
+      isSuspended: counts.expired > 0 && counts.completed < counts.assigned,
+      riskLevel: user?.riskLevel ?? "LOW_RISK",
+      groupName: primaryMembership?.group.name ?? null,
+      isGroupAdmin: user?.groupMemberships.some((m) => m.isAdmin) ?? false,
+      suspiciousCount: suspiciousMap.get(uid) ?? 0,
+      capability: user?.capabilityAssessments[0] ?? null,
+    };
+  });
+
+  // Group items per VA for progress counts.
+  const itemsByVa = new Map<string, { completed: number; total: number }>();
+  for (const item of itemsForPackage) {
+    const slot = itemsByVa.get(item.videoAssetId) ?? { completed: 0, total: 0 };
+    slot.total += 1;
+    if (item.status === "COMPLETED") slot.completed += 1;
+    itemsByVa.set(item.videoAssetId, slot);
+  }
+
+  const assets = allAssets.map((va) => {
+    const slot = itemsByVa.get(va.id) ?? { completed: 0, total: 0 };
     return {
       id: va.id,
       promptZh: va.prompt.textZh,
@@ -47,13 +189,13 @@ export default async function PackageDetailPage({ params }: Props) {
       modelName: va.model.name,
       taskType: va.model.taskType,
       durationSec: va.durationSec,
-      completedItems: completed,
-      totalItems: va.evaluationItems.length,
+      completedItems: slot.completed,
+      totalItems: slot.total,
     };
   });
 
   return (
-    <div className="space-y-6">
+    <div className="h-full space-y-6 overflow-y-auto">
       <div className="flex items-center gap-3">
         <Link href="/admin/samples">
           <Button variant="ghost" size="sm">
@@ -73,7 +215,13 @@ export default async function PackageDetailPage({ params }: Props) {
         <span className="text-lg font-semibold">{pkg.name}</span>
       </div>
 
-      <PackageDetailClient assets={assets} />
+      <PackageDetailClient
+        packageId={packageId}
+        packageName={pkg.name}
+        deadline={pkg.deadline?.toISOString() ?? null}
+        assets={assets}
+        annotatorStats={annotatorStats}
+      />
     </div>
   );
 }

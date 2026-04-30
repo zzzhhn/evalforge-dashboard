@@ -41,18 +41,25 @@ export async function updateSystemConfigs(
   }
 
   for (const { key, value } of updates) {
+    // Validate key format and length
+    if (typeof key !== "string" || key.length > 128) {
+      return { success: false, error: "Invalid key" };
+    }
     if (!key.startsWith("anti_cheat.") && !key.startsWith("display.")) {
-      return { success: false, error: `Invalid key: ${key}` };
+      return { success: false, error: "Invalid key prefix" };
     }
+    // Validate value is a finite number
     if (!Number.isFinite(value) || value < 0) {
-      return { success: false, error: `Invalid value for ${key}: ${value}` };
+      return { success: false, error: "Invalid value" };
     }
-
-    await prisma.systemConfig.update({
-      where: { key },
-      data: { value },
-    });
   }
+
+  // Atomic transaction — all-or-nothing update
+  await prisma.$transaction(
+    updates.map(({ key, value }) =>
+      prisma.systemConfig.update({ where: { key }, data: { value } })
+    )
+  );
 
   return { success: true };
 }

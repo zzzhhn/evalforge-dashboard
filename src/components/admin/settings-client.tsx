@@ -158,6 +158,7 @@ export function SettingsClient({ configs }: Props) {
         </CardContent>
       </Card>
 
+      {/* Display Settings */}
       <Card>
         <CardContent className="p-6 space-y-1">
           <h2 className="text-lg font-semibold mb-4">
@@ -195,6 +196,7 @@ export function SettingsClient({ configs }: Props) {
         </CardContent>
       </Card>
 
+      {/* Save actions */}
       <div className="flex items-center gap-3">
         <Button onClick={handleSave} disabled={saving}>
           {saving ? t("admin.settings.saving") : t("admin.settings.save")}

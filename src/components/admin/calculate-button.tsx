@@ -9,7 +9,7 @@ import { useRouter } from "next/navigation";
 const COOLDOWN_SECONDS = 10;
 
 export function CalculateButton() {
-  const { locale } = useLocale();
+  const { locale, t } = useLocale();
   const router = useRouter();
   const [cooldown, setCooldown] = useState(0);
   const [calculating, setCalculating] = useState(false);
@@ -29,6 +29,7 @@ export function CalculateButton() {
     const res = await triggerCalculation();
     if (res.success) {
       setCooldown(COOLDOWN_SECONDS);
+      // Refresh the page to show updated stats
       router.refresh();
     }
 
@@ -37,10 +38,10 @@ export function CalculateButton() {
 
   const disabled = cooldown > 0 || calculating;
   const label = calculating
-    ? (locale === "zh" ? "计算中…" : "Calculating…")
+    ? t("admin.analytics.calculating")
     : cooldown > 0
       ? `${cooldown}s`
-      : (locale === "zh" ? "计算评分" : "Calculate");
+      : t("admin.analytics.calculate");
 
   return (
     <Button
