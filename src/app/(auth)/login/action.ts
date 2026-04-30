@@ -4,36 +4,49 @@ import { prisma } from "@/lib/db";
 import { createToken, setSessionCookie } from "@/lib/auth";
 import { compare } from "bcryptjs";
 import { redirect } from "next/navigation";
+import { redis } from "@/lib/redis";
 
 export interface LoginState {
   error?: string;
 }
 
-// In-memory rate limiter (per email)
+// ── Redis-backed rate limiter (per email) ──
 const MAX_ATTEMPTS = 5;
-const LOCKOUT_MS = 15 * 60 * 1000; // 15 minutes
-const failedAttempts = new Map<string, { count: number; firstAttempt: number }>();
+const LOCKOUT_SECONDS = 15 * 60; // 15 minutes
 
-function checkRateLimit(email: string): string | null {
-  const entry = failedAttempts.get(email);
-  if (!entry) return null;
-  if (Date.now() - entry.firstAttempt > LOCKOUT_MS) {
-    failedAttempts.delete(email);
-    return null;
-  }
-  if (entry.count >= MAX_ATTEMPTS) {
-    const remainMin = Math.ceil((LOCKOUT_MS - (Date.now() - entry.firstAttempt)) / 60000);
-    return `登录尝试次数过多，请 ${remainMin} 分钟后重试 / Too many attempts, try again in ${remainMin} min`;
+async function checkRateLimit(email: string): Promise<string | null> {
+  const key = `login_attempts:${email}`;
+  try {
+    const count = await redis.get(key);
+    const attempts = count ? parseInt(count, 10) : 0;
+    if (attempts >= MAX_ATTEMPTS) {
+      const ttl = await redis.ttl(key);
+      const remainMin = Math.max(1, Math.ceil(ttl / 60));
+      return `登录尝试次数过多，请 ${remainMin} 分钟后重试 / Too many attempts, try again in ${remainMin} min`;
+    }
+  } catch {
+    // Redis down — fail open (allow login)
   }
   return null;
 }
 
-function recordFailedAttempt(email: string) {
-  const entry = failedAttempts.get(email);
-  if (entry) {
-    entry.count++;
-  } else {
-    failedAttempts.set(email, { count: 1, firstAttempt: Date.now() });
+async function recordFailedAttempt(email: string) {
+  const key = `login_attempts:${email}`;
+  try {
+    const count = await redis.incr(key);
+    if (count === 1) {
+      await redis.expire(key, LOCKOUT_SECONDS);
+    }
+  } catch {
+    // Redis down — skip rate limiting
+  }
+}
+
+async function clearFailedAttempts(email: string) {
+  try {
+    await redis.del(`login_attempts:${email}`);
+  } catch {
+    // Redis down — no-op
   }
 }
 
@@ -44,11 +57,12 @@ export async function loginAction(
   const email = formData.get("email") as string;
   const password = formData.get("password") as string;
 
-  if (!email || !password) {
-    return { error: "请输入邮箱和密码 / Email and password required" };
+  if (!email || !password || password.length < 6) {
+    return { error: "请输入邮箱和密码（至少6位）/ Email and password required (min 6 chars)" };
   }
 
-  const rateLimitError = checkRateLimit(email);
+  // Rate limit check
+  const rateLimitError = await checkRateLimit(email);
   if (rateLimitError) return { error: rateLimitError };
 
   const user = await prisma.user.findUnique({
@@ -56,17 +70,18 @@ export async function loginAction(
   });
 
   if (!user) {
-    recordFailedAttempt(email);
+    await recordFailedAttempt(email);
     return { error: "账号或密码错误 / Invalid credentials" };
   }
 
   const valid = await compare(password, user.passwordHash);
   if (!valid) {
-    recordFailedAttempt(email);
+    await recordFailedAttempt(email);
     return { error: "账号或密码错误 / Invalid credentials" };
   }
 
-  failedAttempts.delete(email);
+  // Clear failed attempts on success
+  await clearFailedAttempts(email);
 
   const token = await createToken({
     userId: user.id,
