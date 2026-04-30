@@ -20,6 +20,7 @@ interface Props {
   dimension: DimensionData;
   onSubmit: (score: number, failureTags: string[], comment: string) => void;
   submitting: boolean;
+  existingScore?: { value: number; failureTags: string[]; comment: string };
 }
 
 const SCORE_COLORS: Record<number, string> = {
@@ -38,11 +39,13 @@ const SCORE_LABEL_KEYS: Record<number, TranslationKey> = {
   5: "score.5",
 };
 
-export function ScoringPanel({ dimension, onSubmit, submitting }: Props) {
+export function ScoringPanel({ dimension, onSubmit, submitting, existingScore }: Props) {
   const { locale, t } = useLocale();
-  const [score, setScore] = useState<number | null>(null);
-  const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
-  const [comment, setComment] = useState("");
+  const [score, setScore] = useState<number | null>(existingScore?.value ?? null);
+  const [selectedTags, setSelectedTags] = useState<Set<string>>(
+    () => new Set(existingScore?.failureTags ?? [])
+  );
+  const [comment, setComment] = useState(existingScore?.comment ?? "");
 
   const needsTags = score !== null && score <= 2 && dimension.failureTags.length > 0;
   const tagsValid = !needsTags || selectedTags.size > 0;
@@ -75,6 +78,8 @@ export function ScoringPanel({ dimension, onSubmit, submitting }: Props) {
     const handler = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
       if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return;
+      // Skip when a modal dialog is open (e.g. watch-progress warning)
+      if (document.querySelector("[data-watch-dialog]")) return;
 
       if (e.key >= "1" && e.key <= "5") {
         e.preventDefault();
@@ -91,18 +96,25 @@ export function ScoringPanel({ dimension, onSubmit, submitting }: Props) {
   }, [canSubmit, handleSubmit]);
 
   return (
-    <div className="space-y-4">
-      {/* Likert Scale */}
-      <div className="rounded-lg border bg-card p-4 space-y-3">
-        <div className="flex items-center justify-center gap-3">
+    <div className="space-y-2">
+      {/* Comment (left) — Likert scale (center) — Submit (right) */}
+      <div className="flex items-center gap-2">
+        <Input
+          placeholder={t("ws.comment")}
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+          className="h-11 w-56 shrink-0 text-sm border-2 border-border focus-visible:border-primary"
+        />
+        <div className="flex flex-1 items-center justify-center gap-1.5">
           {[1, 2, 3, 4, 5].map((value) => {
             const selected = score === value;
             return (
               <button
                 key={value}
                 onClick={() => setScore(value)}
+                title={t(SCORE_LABEL_KEYS[value])}
                 className={cn(
-                  "flex h-12 w-12 items-center justify-center rounded-lg border-2 text-lg font-bold transition-all",
+                  "flex h-11 w-11 items-center justify-center rounded-md border-2 text-base font-bold transition-all",
                   selected
                     ? cn(SCORE_COLORS[value], "scale-110 shadow-md")
                     : "border-border text-muted-foreground hover:border-foreground/30"
@@ -113,60 +125,47 @@ export function ScoringPanel({ dimension, onSubmit, submitting }: Props) {
             );
           })}
         </div>
-        <div className="flex justify-center gap-3">
-          {[1, 2, 3, 4, 5].map((v) => (
-            <span key={v} className="w-12 text-center text-[10px] text-muted-foreground">
-              {t(SCORE_LABEL_KEYS[v])}
-            </span>
-          ))}
-        </div>
-
-        {/* Failure tags (conditional, score <= 2) */}
-        {needsTags && (
-          <div className="animate-in slide-in-from-top-2 space-y-2 rounded-md border border-destructive/30 bg-destructive/5 p-3">
-            <p className="text-xs font-medium text-destructive">
-              {t("ws.failureTags")}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {dimension.failureTags.map((tag) => {
-                const isSelected = selectedTags.has(tag.id);
-                return (
-                  <button
-                    key={tag.id}
-                    onClick={() => toggleTag(tag.id)}
-                    className={cn(
-                      "rounded-full border px-3 py-1 text-xs transition-colors",
-                      isSelected
-                        ? "border-destructive bg-destructive text-destructive-foreground"
-                        : "border-border text-muted-foreground hover:border-destructive/50 hover:text-foreground"
-                    )}
-                  >
-                    {locale === "zh" ? tag.labelZh : tag.labelEn}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Comment + Submit */}
-      <div className="space-y-3">
-        <Input
-          placeholder={t("ws.comment")}
-          value={comment}
-          onChange={(e) => setComment(e.target.value)}
-          className="text-sm"
-        />
         <Button
           onClick={handleSubmit}
           disabled={!canSubmit}
-          className="w-full"
-          size="lg"
+          className="h-11 w-56 shrink-0 text-sm font-semibold shadow-sm"
+          size="default"
         >
-          {submitting ? t("ws.submitting") : t("ws.submitNext")}
+          {submitting
+            ? t("ws.submitting")
+            : existingScore
+              ? (locale === "zh" ? "更新评分" : "Update Score")
+              : t("ws.submitNext")}
         </Button>
       </div>
+
+      {/* Failure tags (conditional, score <= 2) */}
+      {needsTags && (
+        <div className="animate-in slide-in-from-top-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2">
+          <p className="mb-1 text-xs font-medium text-destructive">
+            {t("ws.failureTags")}
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {dimension.failureTags.map((tag) => {
+              const isSelected = selectedTags.has(tag.id);
+              return (
+                <button
+                  key={tag.id}
+                  onClick={() => toggleTag(tag.id)}
+                  className={cn(
+                    "rounded-full border px-2.5 py-0.5 text-xs transition-colors",
+                    isSelected
+                      ? "border-destructive bg-destructive text-destructive-foreground"
+                      : "border-border text-muted-foreground hover:border-destructive/50 hover:text-foreground"
+                  )}
+                >
+                  {locale === "zh" ? tag.labelZh : tag.labelEn}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

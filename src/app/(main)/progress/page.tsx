@@ -1,104 +1,101 @@
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
-import { getLocale, t } from "@/lib/i18n/server";
+import { ProgressClient } from "@/components/progress/progress-client";
 
 export default async function ProgressPage() {
   const session = await getSession();
   if (!session) redirect("/login");
-  const locale = await getLocale();
 
-  const [total, completed, scores] = await Promise.all([
-    prisma.evaluationItem.count({
-      where: { assignedToId: session.userId },
-    }),
-    prisma.evaluationItem.count({
-      where: { assignedToId: session.userId, status: "COMPLETED" },
-    }),
-    prisma.score.findMany({
-      where: { userId: session.userId },
-      select: { value: true },
-    }),
-  ]);
+  // Fetch all items with package and score info
+  const items = await prisma.evaluationItem.findMany({
+    where: {
+      assignedToId: session.userId,
+      // EvaluationItem.packageId is authoritative; legacy fallback dropped
+      // 2026-04-29 (see tasks/page.tsx for context).
+      package: { status: "PUBLISHED", deletedAt: null },
+    },
+    select: {
+      id: true,
+      status: true,
+      // Use the authoritative item.package directly; videoAsset.package is
+      // the legacy 1:1 relation that has drifted.
+      package: { select: { id: true, name: true, deadline: true } },
+    },
+  });
 
-  const pending = total - completed;
-  const progressPct = total > 0 ? Math.round((completed / total) * 100) : 0;
+  const scores = await prisma.score.findMany({
+    where: { userId: session.userId },
+    select: {
+      value: true,
+      evaluationItem: {
+        // Authoritative packageId on the item itself; legacy
+        // videoAsset.packageId has drifted (5 conflict groups in prod).
+        select: { packageId: true },
+      },
+    },
+  });
 
-  const distribution = [0, 0, 0, 0, 0];
-  for (const s of scores) {
-    distribution[s.value - 1]++;
+  // Build per-package summaries
+  const pkgMap = new Map<string, {
+    id: string;
+    name: string;
+    deadline: string | null;
+    total: number;
+    completed: number;
+  }>();
+  for (const item of items) {
+    const pkg = item.package;
+    if (!pkg) continue;
+    const entry = pkgMap.get(pkg.id) ?? {
+      id: pkg.id,
+      name: pkg.name,
+      deadline: pkg.deadline?.toISOString() ?? null,
+      total: 0,
+      completed: 0,
+    };
+    entry.total += 1;
+    if (item.status === "COMPLETED") entry.completed += 1;
+    pkgMap.set(pkg.id, entry);
   }
-  const maxCount = Math.max(...distribution, 1);
+  const packageSummaries = [...pkgMap.values()].sort((a, b) =>
+    a.name.localeCompare(b.name, undefined, { numeric: true })
+  );
+
+  // Build per-package score distributions
+  const pkgScoreMap = new Map<string, [number, number, number, number, number]>();
+  for (const s of scores) {
+    const pkgId = s.evaluationItem.packageId;
+    if (!pkgId) continue;
+    const dist = pkgScoreMap.get(pkgId) ?? [0, 0, 0, 0, 0];
+    dist[s.value - 1]++;
+    pkgScoreMap.set(pkgId, dist);
+  }
+
+  const packageStats = packageSummaries.map((pkg) => ({
+    packageId: pkg.id,
+    total: pkg.total,
+    completed: pkg.completed,
+    scoreDistribution: pkgScoreMap.get(pkg.id) ?? [0, 0, 0, 0, 0] as [number, number, number, number, number],
+  }));
+
+  // Global stats
+  const globalTotal = items.length;
+  const globalCompleted = items.filter((i) => i.status === "COMPLETED").length;
+  const globalDist: [number, number, number, number, number] = [0, 0, 0, 0, 0];
+  for (const s of scores) {
+    globalDist[s.value - 1]++;
+  }
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold">{t(locale, "progress.title")}</h1>
-
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">
-              {t(locale, "progress.completionRate")}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{progressPct}%</div>
-            <Progress value={progressPct} className="mt-2 h-2" />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">
-              {t(locale, "progress.completed")}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{completed}</div>
-            <p className="text-xs text-muted-foreground">
-              {t(locale, "progress.totalTasks", { total: String(total) })}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">
-              {t(locale, "progress.remaining")}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{pending}</div>
-            <p className="text-xs text-muted-foreground">
-              {t(locale, "progress.remainingTasks")}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">
-            {t(locale, "progress.scoreDistribution")}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-end gap-4">
-            {distribution.map((count, i) => (
-              <div key={i} className="flex flex-1 flex-col items-center gap-1">
-                <span className="text-xs text-muted-foreground">{count}</span>
-                <div
-                  className="w-full rounded-t bg-primary transition-all"
-                  style={{ height: `${(count / maxCount) * 120}px` }}
-                />
-                <span className="text-sm font-medium">{i + 1}</span>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+    <ProgressClient
+      packageSummaries={packageSummaries}
+      packageStats={packageStats}
+      globalStats={{
+        total: globalTotal,
+        completed: globalCompleted,
+        scoreDistribution: globalDist,
+      }}
+    />
   );
 }

@@ -2,18 +2,53 @@ import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { redirect, notFound } from "next/navigation";
 import { WorkstationClient } from "@/components/workstation/workstation-client";
+import { ArenaWorkstationClient } from "@/components/workstation/arena-workstation-client";
 import { signAssetUrls } from "@/lib/oss";
 import { loadAntiCheatConfig } from "@/lib/anti-cheat-config";
+import { fetchArenaItem } from "./fetch-arena-item";
 
 interface Props {
   params: Promise<{ itemId: string }>;
+  searchParams: Promise<{ pkg?: string }>;
 }
 
-export default async function WorkstationPage({ params }: Props) {
+export default async function WorkstationPage({ params, searchParams }: Props) {
   const { itemId } = await params;
+  const { pkg: packageIdParam } = await searchParams;
   const session = await getSession();
   if (!session) redirect("/login");
 
+  // ── Dispatch: ArenaItem takes precedence over EvaluationItem ──
+  // Cheap existence check first, then full fetch only when matched.
+  const arenaExists = await prisma.arenaItem.findUnique({
+    where: { id: itemId },
+    select: { id: true, packageId: true },
+  });
+
+  if (arenaExists) {
+    const arenaData = await fetchArenaItem(itemId, packageIdParam ?? arenaExists.packageId);
+    if (!arenaData) {
+      redirect("/tasks");
+    }
+    return (
+      <ArenaWorkstationClient
+        key={arenaData.item.id}
+        packageId={arenaExists.packageId}
+        item={arenaData.item}
+        dimensionHierarchy={arenaData.dimensionHierarchy}
+        progress={arenaData.progress}
+        antiCheatMinWatchRatio={arenaData.antiCheatMinWatchRatio}
+        arenaList={arenaData.arenaList}
+        serverWatchProgressA={arenaData.serverWatchProgressA}
+        serverWatchProgressB={arenaData.serverWatchProgressB}
+        itemVersion={arenaData.itemVersion}
+        hideModel={arenaData.hideModel}
+        nextPairUrls={arenaData.nextPairUrls}
+      />
+    );
+  }
+
+  // ── Existing scoring path ──
   const item = await prisma.evaluationItem.findUnique({
     where: { id: itemId },
     include: {
@@ -36,15 +71,43 @@ export default async function WorkstationPage({ params }: Props) {
     notFound();
   }
 
+  // EvaluationItem.packageId is authoritative. Fall back to the legacy
+  // videoAsset.packageId only when the item predates the migration.
+  const resolvedPkgId =
+    packageIdParam ??
+    item.packageId ??
+    (
+      await prisma.videoAsset.findUnique({
+        where: { id: item.videoAssetId },
+        select: { packageId: true },
+      })
+    )?.packageId ??
+    undefined;
+
+  if (resolvedPkgId) {
+    const pkgStatus = await prisma.evaluationPackage.findUnique({
+      where: { id: resolvedPkgId },
+      select: { status: true, deletedAt: true },
+    });
+    if (!pkgStatus || pkgStatus.deletedAt || pkgStatus.status !== "PUBLISHED") {
+      redirect("/tasks");
+    }
+  }
+
+  const currentPkgId = resolvedPkgId;
+
   const allItems = await prisma.evaluationItem.findMany({
-    where: { assignedToId: session.userId },
-    orderBy: { createdAt: "asc" },
+    where: {
+      assignedToId: session.userId,
+      ...(currentPkgId ? { packageId: currentPkgId } : {}),
+    },
+    orderBy: { videoAsset: { prompt: { externalId: "asc" } } },
     select: {
       id: true,
       status: true,
       videoAsset: {
         select: {
-          prompt: { select: { id: true, externalId: true, textEn: true } },
+          prompt: { select: { externalId: true, textEn: true } },
         },
       },
       dimension: {
@@ -71,7 +134,6 @@ export default async function WorkstationPage({ params }: Props) {
 
   const dimensionCounts = new Map<string, { code: string; label: string; count: number }>();
   for (const ai of allItems) {
-    if (!ai.dimension) continue;
     const l1Code = ai.dimension.parent?.parent?.code
       ?? ai.dimension.parent?.code
       ?? ai.dimension.code;
@@ -89,7 +151,8 @@ export default async function WorkstationPage({ params }: Props) {
   const dimensionFilters = [...dimensionCounts.values()].sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
 
   const videoList = allItems.map((ai, idx) => {
-    const l1NameZh = ai.dimension?.parent?.parent?.nameZh ?? ai.dimension?.parent?.nameZh ?? ai.dimension?.nameZh ?? "";
+    const l1Code = ai.dimension.parent?.parent?.code ?? ai.dimension.parent?.code ?? ai.dimension.code;
+    const l1NameZh = ai.dimension.parent?.parent?.nameZh ?? ai.dimension.parent?.nameZh ?? ai.dimension.nameZh;
     return {
       id: ai.id,
       index: idx + 1,
@@ -97,20 +160,31 @@ export default async function WorkstationPage({ params }: Props) {
       promptPreview: ai.videoAsset.prompt.textEn.length > 60
         ? ai.videoAsset.prompt.textEn.slice(0, 60) + "..."
         : ai.videoAsset.prompt.textEn,
+      l1Code,
       l1Label: l1NameZh,
       status: ai.status,
     };
   });
 
   const dim = item.dimension;
-  const dimL2 = dim?.parent ?? null;
-  const dimL1 = dim?.parent?.parent ?? dim?.parent ?? null;
+  const dimL1 = dim.parent?.parent ?? dim.parent;
 
   const isI2V = item.videoAsset.model.taskType === "I2V";
   const rawSourceImage = isI2V ? item.videoAsset.prompt.sourceImage : null;
   const signed = signAssetUrls(item.videoAsset.url, rawSourceImage);
 
   const acConfig = await loadAntiCheatConfig();
+
+  const existingScore = await prisma.score.findUnique({
+    where: {
+      evaluationItemId_dimensionId_userId: {
+        evaluationItemId: item.id,
+        dimensionId: item.dimension.id,
+        userId: session.userId,
+      },
+    },
+    select: { value: true, failureTags: true, comment: true },
+  });
 
   const hideModelRows = await prisma.systemConfig.findMany({
     where: { key: { in: ["display.hide_model_for_internal", "display.hide_model_for_vendor"] } },
@@ -137,6 +211,7 @@ export default async function WorkstationPage({ params }: Props) {
   return (
     <WorkstationClient
       key={item.id}
+      packageId={currentPkgId ?? null}
       antiCheat={{
         minWatchRatio: acConfig.minWatchRatio,
       }}
@@ -154,20 +229,20 @@ export default async function WorkstationPage({ params }: Props) {
         modelMeta,
       }}
       dimensionHierarchy={{
-        l1Label: dimL1?.nameZh ?? dim?.nameZh ?? "",
-        l2Label: dim?.anchor ?? null,
-        l3Label: dim?.nameZh ?? "",
+        l1Label: dimL1?.nameZh ?? dim.nameZh,
+        l2Label: dim.anchor ?? null,
+        l3Label: dim.nameZh,
       }}
       dimension={{
-        id: dim?.id ?? "",
-        code: dim?.code ?? "",
-        nameZh: dim?.nameZh ?? "",
-        nameEn: dim?.nameEn ?? "",
-        anchor: dim?.anchor ?? null,
-        parentNameZh: dim?.parent?.nameZh ?? null,
-        parentNameEn: dim?.parent?.nameEn ?? null,
-        parentCode: dim?.parent?.code ?? null,
-        failureTags: (dim?.failureTags ?? []).map((t) => ({
+        id: item.dimension.id,
+        code: item.dimension.code,
+        nameZh: item.dimension.nameZh,
+        nameEn: item.dimension.nameEn,
+        anchor: item.dimension.anchor,
+        parentNameZh: item.dimension.parent?.nameZh ?? null,
+        parentNameEn: item.dimension.parent?.nameEn ?? null,
+        parentCode: item.dimension.parent?.code ?? null,
+        failureTags: item.dimension.failureTags.map((t) => ({
           id: t.id,
           labelZh: t.labelZh,
           labelEn: t.labelEn,
@@ -179,10 +254,16 @@ export default async function WorkstationPage({ params }: Props) {
         completed: completedItems,
       }}
       navigation={{ prevItemId, nextItemId }}
-      userId={session.userId}
       dimensionFilters={dimensionFilters}
       videoList={videoList}
       hideModel={hideModel}
+      serverWatchProgress={item.watchProgress as number[] | null}
+      itemVersion={item.version}
+      existingScore={existingScore ? {
+        value: existingScore.value,
+        failureTags: existingScore.failureTags,
+        comment: existingScore.comment ?? "",
+      } : null}
     />
   );
 }
