@@ -1,94 +1,131 @@
 import { prisma } from "@/lib/db";
+import { invalidatePattern } from "@/lib/cache";
 
 export interface AggregationResult {
   itemCount: number;
   dimensionCount: number;
   modelCount: number;
+  aggregatedRows: number;
   calculatedAt: string;
 }
 
 /**
- * Calculate score aggregations: item-level, dimension-level, and model-level.
+ * Calculate score aggregations and persist to AggregatedScore table.
+ * Groups by (modelId, dimensionId) and upserts avg/count/stdDev for today's date.
  * Only uses VALID scores for trusted statistics.
- * Results are logged and can be extended to write to aggregate tables.
  */
 export async function calculateAggregations(): Promise<AggregationResult> {
   const validScores = await prisma.score.findMany({
     where: { validity: "VALID" },
     include: {
-      dimension: { select: { code: true, parentId: true } },
+      dimension: { select: { id: true, code: true, parentId: true } },
       evaluationItem: {
         include: {
           videoAsset: {
-            include: { model: { select: { name: true } } },
+            include: { model: { select: { id: true, name: true } } },
           },
         },
       },
     },
   });
 
-  // ─── Item-level aggregation ───
+  // ─── Item-level aggregation (in-memory stats) ───
   const itemScores = new Map<string, number[]>();
   for (const s of validScores) {
     const key = s.evaluationItemId;
-    if (!itemScores.has(key)) itemScores.set(key, []);
-    itemScores.get(key)!.push(s.value);
+    const existing = itemScores.get(key);
+    if (existing) {
+      existing.push(s.value);
+    } else {
+      itemScores.set(key, [s.value]);
+    }
   }
 
-  const itemAggregates = [...itemScores.entries()].map(([itemId, values]) => {
-    const mean = values.reduce((a, b) => a + b, 0) / values.length;
-    const variance = values.reduce((s, v) => s + (v - mean) ** 2, 0) / values.length;
-    return { itemId, mean, stddev: Math.sqrt(variance), count: values.length };
-  });
-
-  // ─── Dimension-level aggregation ───
-  const dimScores = new Map<string, number[]>();
+  // ─── Model × Dimension aggregation ───
+  const modelDimGroups = new Map<string, { modelId: string; dimensionId: string; values: number[] }>();
   for (const s of validScores) {
-    const code = s.dimension.code;
-    if (!dimScores.has(code)) dimScores.set(code, []);
-    dimScores.get(code)!.push(s.value);
+    const modelId = s.evaluationItem.videoAsset.model.id;
+    const dimensionId = s.dimension.id;
+    const key = `${modelId}|${dimensionId}`;
+    const existing = modelDimGroups.get(key);
+    if (existing) {
+      existing.values.push(s.value);
+    } else {
+      modelDimGroups.set(key, { modelId, dimensionId, values: [s.value] });
+    }
   }
 
-  const dimensionAggregates = [...dimScores.entries()].map(([code, values]) => {
-    const mean = values.reduce((a, b) => a + b, 0) / values.length;
-    return { code, mean: Math.round(mean * 100) / 100, count: values.length };
-  });
+  // ─── Persist to AggregatedScore ───
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
 
-  // ─── Model-level aggregation ───
-  const modelScores = new Map<string, Map<string, number[]>>();
+  let aggregatedRows = 0;
+  const groups = [...modelDimGroups.values()];
+
+  // Batch upserts (50 at a time) to avoid connection pool exhaustion
+  for (let i = 0; i < groups.length; i += 50) {
+    const batch = groups.slice(i, i + 50);
+    await Promise.all(
+      batch.map((g) => {
+        const n = g.values.length;
+        const avg = g.values.reduce((a, b) => a + b, 0) / n;
+        const stdDev = n > 1
+          ? Math.sqrt(g.values.reduce((sum, v) => sum + (v - avg) ** 2, 0) / (n - 1))
+          : 0;
+        const rounded = {
+          avgScore: Math.round(avg * 100) / 100,
+          count: n,
+          stdDev: Math.round(stdDev * 100) / 100,
+        };
+
+        return prisma.aggregatedScore.upsert({
+          where: {
+            date_modelId_dimensionId: {
+              date: today,
+              modelId: g.modelId,
+              dimensionId: g.dimensionId,
+            },
+          },
+          update: rounded,
+          create: {
+            date: today,
+            modelId: g.modelId,
+            dimensionId: g.dimensionId,
+            ...rounded,
+          },
+        });
+      })
+    );
+    aggregatedRows += batch.length;
+  }
+
+  // ─── Dimension-level stats (for logging) ───
+  const dimCodes = new Set<string>();
   for (const s of validScores) {
-    const model = s.evaluationItem.videoAsset.model.name;
-    if (!modelScores.has(model)) modelScores.set(model, new Map());
-    const dimMap = modelScores.get(model)!;
-    const code = s.dimension.code;
-    if (!dimMap.has(code)) dimMap.set(code, []);
-    dimMap.get(code)!.push(s.value);
+    dimCodes.add(s.dimension.code);
   }
 
-  const modelAggregates = [...modelScores.entries()].map(([model, dimMap]) => {
-    const allValues = [...dimMap.values()].flat();
-    const overall = allValues.reduce((a, b) => a + b, 0) / allValues.length;
-    const dimMeans = [...dimMap.entries()].map(([code, vals]) => ({
-      code,
-      mean: Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 100) / 100,
-    }));
-    return {
-      model,
-      overall: Math.round(overall * 100) / 100,
-      dimensions: dimMeans,
-      totalScores: allValues.length,
-    };
-  });
+  // ─── Model-level stats (for logging) ───
+  const modelNames = new Set<string>();
+  for (const s of validScores) {
+    modelNames.add(s.evaluationItem.videoAsset.model.name);
+  }
+
+  // Bust analytics cache so next page load sees fresh data
+  const busted = await invalidatePattern("analytics:*");
 
   console.log(`[Aggregation] ${new Date().toISOString()}`);
-  console.log(`  Items: ${itemAggregates.length}`);
-  console.log(`  Dimensions: ${dimensionAggregates.length}`);
-  console.log(`  Models: ${modelAggregates.map((m) => `${m.model}=${m.overall}`).join(", ")}`);
+  console.log(`  Items: ${itemScores.size}`);
+  console.log(`  Dimensions: ${dimCodes.size}`);
+  console.log(`  Models: ${modelNames.size}`);
+  console.log(`  Aggregated rows upserted: ${aggregatedRows}`);
+  console.log(`  Cache keys invalidated: ${busted}`);
 
   return {
-    itemCount: itemAggregates.length,
-    dimensionCount: dimensionAggregates.length,
-    modelCount: modelAggregates.length,
+    itemCount: itemScores.size,
+    dimensionCount: dimCodes.size,
+    modelCount: modelNames.size,
+    aggregatedRows,
     calculatedAt: new Date().toISOString(),
   };
 }

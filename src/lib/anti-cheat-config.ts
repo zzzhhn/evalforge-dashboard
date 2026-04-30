@@ -30,7 +30,20 @@ const KEY_MAP: Record<string, keyof AntiCheatConfig> = {
   "anti_cheat.recent_scores_window": "recentScoresWindow",
 };
 
+// In-memory TTL cache. Anti-cheat config is read on every navigation
+// AND every submit — at 30 actions/min that's 30 needless DB roundtrips.
+// Admins rarely tweak these values, so a 5-minute TTL is fine; on
+// updates the worst case is a 5-minute lag before a worker process
+// picks up the new value.
+const CACHE_TTL_MS = 5 * 60 * 1000;
+let cached: { config: AntiCheatConfig; expiresAt: number } | null = null;
+
 export async function loadAntiCheatConfig(): Promise<AntiCheatConfig> {
+  const now = Date.now();
+  if (cached && cached.expiresAt > now) {
+    return cached.config;
+  }
+
   const rows = await prisma.systemConfig.findMany({
     where: { key: { startsWith: "anti_cheat." } },
   });
@@ -42,5 +55,12 @@ export async function loadAntiCheatConfig(): Promise<AntiCheatConfig> {
       config[field] = row.value as number;
     }
   }
+  cached = { config, expiresAt: now + CACHE_TTL_MS };
   return config;
+}
+
+/** Drop the cache. Call from admin settings save flow if you need
+ *  changes to take effect immediately rather than within 5 min. */
+export function invalidateAntiCheatConfigCache(): void {
+  cached = null;
 }
