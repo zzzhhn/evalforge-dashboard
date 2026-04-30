@@ -102,16 +102,18 @@ export default async function AnnotatorDetailPage({ params }: Props) {
     taskType: s.evaluationItem.videoAsset.model.taskType,
   }));
 
-  const serializedEvents = antiCheatEvents.map((e) => ({
-    id: e.id,
-    eventType: e.eventType,
-    severity: e.severity,
-    payload: e.payload as Record<string, unknown>,
-    watchRatio: e.watchRatio,
-    dwellTimeMs: e.dwellTimeMs,
-    videoExternalId: e.evaluationItem.videoAsset.prompt.externalId,
-    createdAt: e.createdAt.toISOString(),
-  }));
+  const serializedEvents = antiCheatEvents
+    .filter((e) => e.evaluationItem !== null)
+    .map((e) => ({
+      id: e.id,
+      eventType: e.eventType,
+      severity: e.severity,
+      payload: e.payload as Record<string, unknown>,
+      watchRatio: e.watchRatio,
+      dwellTimeMs: e.dwellTimeMs,
+      videoExternalId: e.evaluationItem!.videoAsset.prompt.externalId,
+      createdAt: e.createdAt.toISOString(),
+    }));
 
   const integrity = {
     score: integrityScore,

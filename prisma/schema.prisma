@@ -47,107 +47,6 @@ enum AccountType {
   VENDOR
 }
 
-// ─── User ────────────────────────────────────────────
-
-model User {
-  id            String      @id @default(uuid())
-  email         String      @unique
-  name          String
-  passwordHash  String      @map("password_hash")
-  role          Role        @default(ANNOTATOR)
-  accountType   AccountType @default(INTERNAL) @map("account_type")
-  riskLevel     RiskLevel   @default(NORMAL) @map("risk_level")
-
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
-  deletedAt     DateTime? @map("deleted_at")
-
-  evaluationItems EvaluationItem[]
-  scores          Score[]
-  antiCheatEvents AntiCheatEvent[]
-
-  @@map("users")
-}
-
-// ─── Model ───────────────────────────────────────────
-
-model Model {
-  id          String   @id @default(uuid())
-  name        String   @unique
-  provider    String
-  taskType    TaskType @map("task_type")
-  description String?
-  version     Int      @default(1)
-
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-
-  videoAssets VideoAsset[]
-
-  @@map("models")
-}
-
-// ─── Prompt ──────────────────────────────────────────
-
-model Prompt {
-  id              String   @id @default(uuid())
-  externalId      String   @unique @map("external_id")  // e.g. "T2V_001", "I2V_001"
-  textZh          String   @map("text_zh")
-  textEn          String   @map("text_en")
-  taskType        TaskType @map("task_type")
-  category        String?
-  sourceImage     String?  @map("source_image")          // I2V start frame URL
-  sourceImagePrompt String? @map("source_image_prompt")  // I2V start frame generation prompt
-
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-
-  videoAssets VideoAsset[]
-
-  @@map("prompts")
-}
-
-// ─── Dimension (self-referential tree) ───────────────
-
-model Dimension {
-  id          String  @id @default(uuid())
-  code        String  @unique          // e.g. "D4", "D4.1"
-  nameZh      String  @map("name_zh")
-  nameEn      String  @map("name_en")
-  anchor      String?                  // anchor description
-  testPoints  Json?   @map("test_points") // string[]
-  sortOrder   Int     @default(0) @map("sort_order")
-
-  parentId    String? @map("parent_id")
-  parent      Dimension?  @relation("DimensionTree", fields: [parentId], references: [id])
-  children    Dimension[] @relation("DimensionTree")
-
-  createdAt   DateTime @default(now()) @map("created_at")
-
-  scores          Score[]
-  failureTags     FailureTag[]
-  evaluationItems EvaluationItem[]
-
-  @@map("dimensions")
-}
-
-// ─── Failure Tag ─────────────────────────────────────
-
-model FailureTag {
-  id          String    @id @default(uuid())
-  labelZh     String    @map("label_zh")
-  labelEn     String    @map("label_en")
-
-  dimensionId String    @map("dimension_id")
-  dimension   Dimension @relation(fields: [dimensionId], references: [id])
-
-  createdAt   DateTime  @default(now()) @map("created_at")
-
-  @@map("failure_tags")
-}
-
-// ─── Evaluation Package ──────────────────────────────
-
 enum PackageStatus {
   DRAFT
   PUBLISHED
@@ -155,128 +54,689 @@ enum PackageStatus {
   ARCHIVED
 }
 
+enum EvaluationMode {
+  SCORING
+  ARENA
+}
+
+enum ArenaVerdict {
+  LEFT_WINS
+  RIGHT_WINS
+  BOTH_GOOD
+  BOTH_BAD
+}
+
+enum TagSource {
+  MANUAL
+  AUTO_SUGGESTED
+}
+
+// ─── User ────────────────────────────────────────────
+
+model User {
+  id           String      @id @default(uuid())
+  email        String      @unique
+  name         String
+  passwordHash String      @map("password_hash")
+  role         Role        @default(ANNOTATOR)
+  accountType  AccountType @default(INTERNAL) @map("account_type")
+  riskLevel    RiskLevel   @default(NORMAL) @map("risk_level")
+
+  // Optional profile (Phase 0.3)
+  gender    String?
+  ageRange  String? @map("age_range")
+  city      String?
+  education String?
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  evaluationItems       EvaluationItem[]
+  scores                Score[]
+  antiCheatEvents       AntiCheatEvent[]
+  arenaItems            ArenaItem[]
+  groupMemberships      GroupMembership[]
+  tags                  UserTag[]
+  capabilityAssessments CapabilityAssessment[]
+  viewerAssignments     ViewerAssignment[]     @relation("ViewerAssignments_Viewer")
+  assignedViewerGrants  ViewerAssignment[]     @relation("ViewerAssignments_Assigner")
+  credentialVault       CredentialVaultEntry?
+  credentialAudits      CredentialAccessAudit[] @relation("CredentialAudit_Actor")
+  credentialTargetAudits CredentialAccessAudit[] @relation("CredentialAudit_Target")
+
+  @@map("users")
+}
+
+// ─── Credential Vault (Phase G.9) ────────────────────
+// AES-256-GCM encrypted copy of the user's current plaintext password,
+// so ADMINs can re-view or hand out credentials without resetting them
+// every time. Complements (does not replace) the bcrypt hash on User —
+// bcrypt verifies at login, vault answers "what is it right now".
+//
+// Security invariants:
+//   - Encryption key lives in env CREDENTIAL_VAULT_KEY (base64 32B).
+//     Never stored in DB, git, or client.
+//   - AES-256-GCM: authenticated encryption. Tamper → decrypt fails.
+//   - IV per row (12B random). No reuse.
+//   - `version` field reserved for future key rotation without downtime.
+//   - Any access is logged to CredentialAccessAudit before plaintext
+//     leaves the server process.
+//   - On user soft-delete, vault row cascades (no orphan secrets).
+model CredentialVaultEntry {
+  id         String   @id @default(uuid())
+  userId     String   @unique @map("user_id")
+  ciphertext String   // base64 AES-256-GCM encrypted plaintext password
+  iv         String   // base64 12-byte initialization vector
+  authTag    String   @map("auth_tag") // base64 16-byte GCM auth tag
+  version    Int      @default(1) // encryption scheme version (for key rotation)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("credential_vault")
+}
+
+enum CredentialAuditAction {
+  CREATE  // password first stored (user creation path)
+  RESET   // password rotated (reset / custom)
+  VIEW    // admin revealed the plaintext via UI
+  DELETE  // vault entry explicitly removed
+}
+
+// Immutable audit trail of every credential access. Never purged (retain
+// at least for the life of the ECS deployment). Admins can query this to
+// detect suspicious reveal patterns.
+model CredentialAccessAudit {
+  id           String                @id @default(uuid())
+  actorId      String                @map("actor_id")
+  targetUserId String                @map("target_user_id")
+  action       CredentialAuditAction
+  timestamp    DateTime              @default(now())
+  ipAddress    String?               @map("ip_address")
+  userAgent    String?               @map("user_agent")
+  actor        User                  @relation("CredentialAudit_Actor", fields: [actorId], references: [id])
+  targetUser   User                  @relation("CredentialAudit_Target", fields: [targetUserId], references: [id])
+
+  @@index([targetUserId, timestamp])
+  @@index([actorId, timestamp])
+  @@map("credential_access_audit")
+}
+
+// ─── Viewer Assignment (Phase B.5) ───────────────────
+// Grants a VIEWER-role user read access to a specific EvaluationPackage's
+// video feed. Purely an access-control join; no watch tracking, no scoring.
+model ViewerAssignment {
+  id         String   @id @default(cuid())
+  viewerId   String   @map("viewer_id")
+  packageId  String   @map("package_id")
+  assignedAt DateTime @default(now()) @map("assigned_at")
+  assignedBy String   @map("assigned_by")
+
+  viewer   User              @relation("ViewerAssignments_Viewer", fields: [viewerId], references: [id], onDelete: Cascade)
+  assigner User              @relation("ViewerAssignments_Assigner", fields: [assignedBy], references: [id])
+  package  EvaluationPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+
+  @@unique([viewerId, packageId])
+  @@index([viewerId])
+  @@index([packageId])
+  @@map("viewer_assignments")
+}
+
+// ─── Evaluation Package ──────────────────────────────
+
 model EvaluationPackage {
-  id              String        @id @default(uuid())
-  name            String        @unique                // e.g. "T2V_200_5_20260409"
-  taskType        TaskType      @map("task_type")
-  videoCount      Int           @map("video_count")
-  annotatorCount  Int           @map("annotator_count")
-  status          PackageStatus @default(DRAFT)
-  publishedAt     DateTime?     @map("published_at")
-  deadline        DateTime?                            // submission deadline
-  recalledAt      DateTime?     @map("recalled_at")
-  modelCheckpoint String?       @map("model_checkpoint") // e.g. "bach-v2.1-20260408"
-  description     String?
+  id                 String         @id @default(uuid())
+  name               String         @unique // e.g. "T2V_200_5_20260409"
+  taskType           TaskType       @map("task_type")
+  evaluationMode     EvaluationMode @default(SCORING) @map("evaluation_mode")
+  isCalibrationBatch Boolean        @default(false) @map("is_calibration_batch")
+  videoCount         Int            @map("video_count")
+  annotatorCount     Int            @map("annotator_count")
+  status             PackageStatus  @default(DRAFT)
+  startAt            DateTime?      @map("start_at") // start of evaluation window
+  publishedAt        DateTime?      @map("published_at")
+  deadline           DateTime? // submission deadline
+  recalledAt         DateTime?      @map("recalled_at")
+  modelCheckpoint    String?        @map("model_checkpoint") // e.g. "v2-20260408"
+  description        String?
 
-  createdAt       DateTime      @default(now()) @map("created_at")
-  updatedAt       DateTime      @updatedAt @map("updated_at")
+  promptSuiteId String?      @map("prompt_suite_id")
+  promptSuite   PromptSuite? @relation(fields: [promptSuiteId], references: [id])
 
-  videoAssets VideoAsset[]
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  // Soft-delete timestamp. Non-null means hidden from list views; undo
+  // clears it within the 30s window. Hard delete is a separate admin path.
+  deletedAt DateTime? @map("deleted_at")
+
+  videoAssets       VideoAsset[]
+  evaluationItems   EvaluationItem[]
+  arenaItems        ArenaItem[]
+  datasets          Dataset[]                @relation("PackageDatasets")
+  groundTruths      CalibrationGroundTruth[]
+  viewerAssignments ViewerAssignment[]
 
   @@map("evaluation_packages")
 }
 
-// ─── System Config (admin-tunable parameters) ───────
+// ─── Model ───────────────────────────────────────────
 
-model SystemConfig {
-  id        String   @id @default(uuid())
-  key       String   @unique                    // e.g. "anti_cheat.min_watch_ratio"
-  value     Json                                // typed value
-  label     String?                             // human-readable description
+model Model {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  provider    String?
+  taskType    TaskType @map("task_type")
+  description String?
+  version     Int      @default(1)
+
+  createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  @@map("system_configs")
+  videoAssets      VideoAsset[]
+  aggregatedScores AggregatedScore[]
+  datasets         Dataset[]
+
+  @@map("models")
+}
+
+// ─── Prompt ──────────────────────────────────────────
+
+model Prompt {
+  id                String   @id @default(uuid())
+  externalId        String   @unique @map("external_id") // e.g. "T2V_001", "I2V_001"
+  textZh            String   @map("text_zh")
+  textEn            String   @map("text_en")
+  taskType          TaskType @map("task_type")
+  category          String?
+  sourceImage       String?  @map("source_image") // I2V start frame URL
+  sourceImagePrompt String?  @map("source_image_prompt") // I2V start frame generation prompt
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  videoAssets        VideoAsset[]
+  promptSuiteEntries PromptSuiteEntry[]
+  arenaItems         ArenaItem[]
+  images             Image[]
+
+  @@map("prompts")
+}
+
+// ─── Dimension (self-referential tree) ───────────────
+
+model Dimension {
+  id         String  @id @default(uuid())
+  code       String  @unique // e.g. "D4", "D4.1"
+  nameZh     String  @map("name_zh")
+  nameEn     String  @map("name_en")
+  anchor     String? // anchor description
+  testPoints Json?   @map("test_points") // string[]
+  sortOrder  Int     @default(0) @map("sort_order")
+
+  parentId String?     @map("parent_id")
+  parent   Dimension?  @relation("DimensionTree", fields: [parentId], references: [id])
+  children Dimension[] @relation("DimensionTree")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  scores             Score[]
+  failureTags        FailureTag[]
+  evaluationItems    EvaluationItem[]
+  aggregatedScores   AggregatedScore[]
+  promptSuiteEntries PromptSuiteEntry[]
+  arenaItems         ArenaItem[]
+  groundTruths       CalibrationGroundTruth[]
+
+  @@map("dimensions")
+}
+
+// ─── Failure Tag ─────────────────────────────────────
+
+model FailureTag {
+  id      String @id @default(uuid())
+  labelZh String @map("label_zh")
+  labelEn String @map("label_en")
+
+  dimensionId String    @map("dimension_id")
+  dimension   Dimension @relation(fields: [dimensionId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("failure_tags")
 }
 
 // ─── Video Asset ─────────────────────────────────────
 
 model VideoAsset {
-  id          String  @id @default(uuid())
+  id          String    @id @default(uuid())
   url         String
-  durationSec Float?  @map("duration_sec")
+  ossKey      String?   @map("oss_key") // canonical OSS object key for re-signing
+  signedUrl   String?   @map("signed_url") // mirrors `url` when signed; kept explicit for lifecycle
+  expiresAt   DateTime? @map("expires_at") // signed-url expiry
+  durationSec Float?    @map("duration_sec")
   width       Int?
   height      Int?
   fps         Int?
 
-  modelId     String  @map("model_id")
-  model       Model   @relation(fields: [modelId], references: [id])
-  promptId    String  @map("prompt_id")
-  prompt      Prompt  @relation(fields: [promptId], references: [id])
-  packageId   String? @map("package_id")
-  package     EvaluationPackage? @relation(fields: [packageId], references: [id])
+  modelId   String             @map("model_id")
+  model     Model              @relation(fields: [modelId], references: [id])
+  promptId  String             @map("prompt_id")
+  prompt    Prompt             @relation(fields: [promptId], references: [id])
+  packageId String?            @map("package_id")
+  package   EvaluationPackage? @relation(fields: [packageId], references: [id])
+  datasetId String?            @map("dataset_id")
+  dataset   Dataset?           @relation(fields: [datasetId], references: [id])
 
-  createdAt   DateTime @default(now()) @map("created_at")
+  createdAt DateTime @default(now()) @map("created_at")
 
-  evaluationItems EvaluationItem[]
+  evaluationItems   EvaluationItem[]
+  arenaItemsAsLeft  ArenaItem[]              @relation("ArenaLeft")
+  arenaItemsAsRight ArenaItem[]              @relation("ArenaRight")
+  groundTruths      CalibrationGroundTruth[]
 
   @@unique([modelId, promptId])
+  @@index([datasetId])
   @@map("video_assets")
 }
 
 // ─── Evaluation Item (task assignment) ───────────────
 
 model EvaluationItem {
-  id           String           @id @default(uuid())
-  status       EvaluationStatus @default(PENDING)
-  assignedAt   DateTime?        @map("assigned_at")
-  completedAt  DateTime?        @map("completed_at")
-  dwellTimeMs  Int?             @map("dwell_time_ms")
+  id            String           @id @default(uuid())
+  status        EvaluationStatus @default(PENDING)
+  assignedAt    DateTime?        @map("assigned_at")
+  completedAt   DateTime?        @map("completed_at")
+  dwellTimeMs   Int?             @map("dwell_time_ms")
+  watchProgress Json?            @map("watch_progress") // Server-persisted watched seconds array
 
-  videoAssetId String           @map("video_asset_id")
-  videoAsset   VideoAsset       @relation(fields: [videoAssetId], references: [id])
-  assignedToId String           @map("assigned_to_id")
-  assignedTo   User             @relation(fields: [assignedToId], references: [id])
-  dimensionId  String           @map("dimension_id")
-  dimension    Dimension        @relation(fields: [dimensionId], references: [id])
+  videoAssetId String             @map("video_asset_id")
+  videoAsset   VideoAsset         @relation(fields: [videoAssetId], references: [id])
+  dimensionId  String             @map("dimension_id")
+  dimension    Dimension          @relation(fields: [dimensionId], references: [id])
+  assignedToId String             @map("assigned_to_id")
+  assignedTo   User               @relation(fields: [assignedToId], references: [id])
+  // Explicit package ownership. Nullable for legacy items written before
+  // Dataset-first made VideoAsset.packageId non-authoritative; new items
+  // always populate this. Query items for a package via this field, not
+  // via videoAsset.packageId (which is 1:1 and breaks on Dataset reuse).
+  packageId    String?            @map("package_id")
+  package      EvaluationPackage? @relation(fields: [packageId], references: [id])
 
-  createdAt    DateTime         @default(now()) @map("created_at")
-  updatedAt    DateTime         @updatedAt @map("updated_at")
-  version      Int              @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  version   Int      @default(1)
 
   scores          Score[]
   antiCheatEvents AntiCheatEvent[]
 
+  // Prevents duplicate (annotator, asset, dimension) assignments within a
+  // package. Historical root cause (2026-04-20): addAnnotatorToPackage was
+  // non-idempotent and stacked a second 181-dim batch onto PixVerse v6's
+  // User 1-5, inflating items from 2000 to 3000. Postgres treats NULL as
+  // distinct in unique constraints, so legacy packageId=NULL rows are
+  // unaffected; all new inserts populate packageId.
+  @@unique([assignedToId, videoAssetId, dimensionId, packageId], name: "uniq_assignment_eval")
+  @@index([packageId])
   @@map("evaluation_items")
 }
 
 // ─── Score ───────────────────────────────────────────
 
 model Score {
-  id            String        @id @default(uuid())
-  value         Int                           // 1-5 Likert
-  failureTags   String[]      @map("failure_tags")  // tag IDs
-  comment       String?
-  validity      ScoreValidity @default(VALID)
+  id          String        @id @default(uuid())
+  value       Int // 1-5 Likert
+  failureTags String[]      @map("failure_tags") // tag IDs
+  comment     String?
+  validity    ScoreValidity @default(VALID)
 
-  evaluationItemId String     @map("evaluation_item_id")
+  evaluationItemId String         @map("evaluation_item_id")
   evaluationItem   EvaluationItem @relation(fields: [evaluationItemId], references: [id])
-  dimensionId      String     @map("dimension_id")
-  dimension        Dimension  @relation(fields: [dimensionId], references: [id])
-  userId           String     @map("user_id")
-  user             User       @relation(fields: [userId], references: [id])
+  dimensionId      String         @map("dimension_id")
+  dimension        Dimension      @relation(fields: [dimensionId], references: [id])
+  userId           String         @map("user_id")
+  user             User           @relation(fields: [userId], references: [id])
 
-  createdAt     DateTime      @default(now()) @map("created_at")
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@unique([evaluationItemId, dimensionId, userId])
   @@map("scores")
 }
 
+// ─── Aggregated Score (materialized view) ───────────
+
+model AggregatedScore {
+  id       String   @id @default(uuid())
+  date     DateTime @db.Date // aggregation date
+  avgScore Float    @map("avg_score")
+  count    Int // number of raw scores
+  stdDev   Float    @map("std_dev")
+
+  modelId     String    @map("model_id")
+  model       Model     @relation(fields: [modelId], references: [id])
+  dimensionId String    @map("dimension_id")
+  dimension   Dimension @relation(fields: [dimensionId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([date, modelId, dimensionId])
+  @@index([modelId])
+  @@index([dimensionId])
+  @@map("aggregated_scores")
+}
+
+// ─── System Config (admin-tunable parameters) ───────
+
+model SystemConfig {
+  id        String   @id @default(uuid())
+  key       String   @unique // e.g. "anti_cheat.min_watch_ratio"
+  value     Json // typed value
+  label     String? // human-readable description
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("system_configs")
+}
+
 // ─── Anti-Cheat Event ────────────────────────────────
 
 model AntiCheatEvent {
-  id              String   @id @default(uuid())
-  eventType       String   @map("event_type")    // e.g. "low_watch_ratio", "fixed_value", "rapid_submit"
-  severity        String   @default("INFO")       // INFO, WARNING, CRITICAL
-  payload         Json                             // event-specific data
-  watchRatio      Float?   @map("watch_ratio")
-  dwellTimeMs     Int?     @map("dwell_time_ms")
+  id          String @id @default(uuid())
+  eventType   String @map("event_type") // e.g. "low_watch_ratio", "fixed_value", "rapid_submit"
+  severity    String @default("INFO") // INFO, WARNING, CRITICAL
+  payload     Json // event-specific data
+  watchRatio  Float? @map("watch_ratio")
+  dwellTimeMs Int?   @map("dwell_time_ms")
 
-  evaluationItemId String  @map("evaluation_item_id")
-  evaluationItem   EvaluationItem @relation(fields: [evaluationItemId], references: [id])
-  userId           String  @map("user_id")
-  user             User    @relation(fields: [userId], references: [id])
+  evaluationItemId String?         @map("evaluation_item_id")
+  evaluationItem   EvaluationItem? @relation(fields: [evaluationItemId], references: [id])
+  arenaItemId      String?         @map("arena_item_id")
+  arenaItem        ArenaItem?      @relation(fields: [arenaItemId], references: [id])
+  userId           String          @map("user_id")
+  user             User            @relation(fields: [userId], references: [id])
 
-  createdAt       DateTime @default(now()) @map("created_at")
+  createdAt DateTime @default(now()) @map("created_at")
 
+  @@index([evaluationItemId])
+  @@index([arenaItemId])
   @@map("anti_cheat_events")
+}
+
+// ─── Arena Item (dual-video PK) ──────────────────────
+
+model ArenaItem {
+  id             String           @id @default(uuid())
+  status         EvaluationStatus @default(PENDING)
+  assignedAt     DateTime?        @map("assigned_at")
+  completedAt    DateTime?        @map("completed_at")
+  dwellTimeMs    Int?             @map("dwell_time_ms")
+  watchProgressA Json?            @map("watch_progress_a") // left-video watched seconds array
+  watchProgressB Json?            @map("watch_progress_b") // right-video watched seconds array
+  verdict        ArenaVerdict?
+
+  packageId     String            @map("package_id")
+  package       EvaluationPackage @relation(fields: [packageId], references: [id])
+  promptId      String            @map("prompt_id")
+  prompt        Prompt            @relation(fields: [promptId], references: [id])
+  dimensionId   String            @map("dimension_id")
+  dimension     Dimension         @relation(fields: [dimensionId], references: [id])
+  videoAssetAId String            @map("video_asset_a_id")
+  videoAssetA   VideoAsset        @relation("ArenaLeft", fields: [videoAssetAId], references: [id])
+  videoAssetBId String            @map("video_asset_b_id")
+  videoAssetB   VideoAsset        @relation("ArenaRight", fields: [videoAssetBId], references: [id])
+  assignedToId  String            @map("assigned_to_id")
+  assignedTo    User              @relation(fields: [assignedToId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  version   Int      @default(1)
+
+  antiCheatEvents AntiCheatEvent[]
+
+  @@unique([assignedToId, packageId, promptId, dimensionId], name: "uniq_assignment_arena")
+  @@index([packageId])
+  @@index([assignedToId])
+  @@index([status])
+  @@map("arena_items")
+}
+
+// ─── Prompt Suite (first-class, reusable) ────────────
+
+model PromptSuite {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  taskType    TaskType @map("task_type")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  entries            PromptSuiteEntry[]
+  evaluationPackages EvaluationPackage[]
+  datasets           Dataset[]
+  imageSets          ImageSet[]
+
+  @@map("prompt_suites")
+}
+
+model PromptSuiteEntry {
+  id        String @id @default(uuid())
+  sortOrder Int    @default(0) @map("sort_order")
+
+  promptSuiteId String      @map("prompt_suite_id")
+  promptSuite   PromptSuite @relation(fields: [promptSuiteId], references: [id], onDelete: Cascade)
+  promptId      String      @map("prompt_id")
+  prompt        Prompt      @relation(fields: [promptId], references: [id])
+  dimensionId   String      @map("dimension_id")
+  dimension     Dimension   @relation(fields: [dimensionId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([promptSuiteId, promptId, dimensionId])
+  @@index([promptSuiteId])
+  @@map("prompt_suite_entries")
+}
+
+// ─── Annotator Group ─────────────────────────────────
+
+model AnnotatorGroup {
+  id          String  @id @default(uuid())
+  name        String  @unique
+  description String?
+
+  // Design-aligned metadata (Phase D.5). All optional: legacy rows stay valid.
+  location     String? // 城市 / 区域, e.g. "北京·海淀"
+  organization String? // 组织 / 公司名, e.g. "朗译科技（北京）"
+  monthlyQuota Int?    @map("monthly_quota") // 月度样本配额
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  memberships GroupMembership[]
+
+  @@map("annotator_groups")
+}
+
+model GroupMembership {
+  id      String  @id @default(uuid())
+  isAdmin Boolean @default(false) @map("is_admin")
+
+  userId  String         @map("user_id")
+  user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  groupId String         @map("group_id")
+  group   AnnotatorGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  joinedAt DateTime @default(now()) @map("joined_at")
+
+  @@unique([userId, groupId])
+  @@index([groupId])
+  @@map("group_memberships")
+}
+
+// ─── Annotator Tag ───────────────────────────────────
+
+model AnnotatorTag {
+  id     String  @id @default(uuid())
+  name   String  @unique // e.g. "通用", "运镜", "物理规律"
+  nameEn String? @map("name_en")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  userTags UserTag[]
+
+  @@map("annotator_tags")
+}
+
+model UserTag {
+  userId     String       @map("user_id")
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tagId      String       @map("tag_id")
+  tag        AnnotatorTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  source     TagSource    @default(MANUAL)
+  confidence Float? // 0-1, for AUTO_SUGGESTED
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@id([userId, tagId])
+  @@index([tagId])
+  @@map("user_tags")
+}
+
+// ─── Capability Assessment ───────────────────────────
+
+model CapabilityAssessment {
+  id             String   @id @default(uuid())
+  assessmentDate DateTime @default(now()) @map("assessment_date")
+  accuracy       Float // 0-10 (legacy heuristic score, kept for historical compat)
+  consistency    Float // 0-10
+  coverage       Float // 0-10
+  detailOriented Float    @map("detail_oriented") // 0-10
+  speed          Float // 0-10
+  compositeScore Float    @map("composite_score") // 0-10, weighted average
+  metadata       Json?
+
+  // Bayesian posterior fields (Phase 5 IRT-lite). Nullable during rollout +
+  // for legacy rows — code should fall back to compositeScore when null.
+  alphaMean      Float?          @map("alpha_mean") // ability logit, ~N(0, 1)
+  alphaStd       Float?          @map("alpha_std") // posterior std
+  alphaCILow     Float?          @map("alpha_ci_low") // 2.5 percentile
+  alphaCIHigh    Float?          @map("alpha_ci_high") // 97.5 percentile
+  rankPercentile Float?          @map("rank_percentile") // 0-100, within same calibration batch
+  tier           CapabilityTier?
+
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([assessmentDate])
+  @@map("capability_assessments")
+}
+
+enum CapabilityTier {
+  TIER_1 // top — ~top 20%
+  TIER_2 // solid — ~20-60%
+  TIER_3 // needs-work — ~60-90%
+  TIER_4 // low-confidence / remove — bottom 10%
+}
+
+// ─── Calibration Ground Truth ─────────────────────────
+// Expected score + failure tags per (calibration package, video, dimension).
+// Populated by admins before running a calibration assessment. One row per
+// (video, dimension) tuple within a calibration batch; shared across all
+// annotators assigned to that batch.
+
+model CalibrationGroundTruth {
+  id            String   @id @default(uuid())
+  score         Int // 1-5 expected Likert
+  failureTagIds String[] @map("failure_tag_ids") // expected failure tag IDs
+  notes         String?
+
+  packageId    String            @map("package_id")
+  package      EvaluationPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  videoAssetId String            @map("video_asset_id")
+  videoAsset   VideoAsset        @relation(fields: [videoAssetId], references: [id])
+  dimensionId  String            @map("dimension_id")
+  dimension    Dimension         @relation(fields: [dimensionId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([packageId, videoAssetId, dimensionId])
+  @@index([packageId])
+  @@map("calibration_ground_truths")
+}
+
+// ─── Dataset (评测数据集: model × promptSuite × taskType) ────
+
+model Dataset {
+  id             String   @id @default(uuid())
+  name           String   @unique // e.g. "Kling25_T2V_200_20260417"
+  taskType       TaskType @map("task_type")
+  videoOssPrefix String   @map("video_oss_prefix") // OSS prefix used at scan time
+  videoCount     Int      @map("video_count")
+  generatedAt    DateTime @default(now()) @map("generated_at")
+
+  // Generation parameter metadata — shown on dataset card. Phase D additive, all nullable.
+  frames     Int?    @map("frames")
+  resolution String? @map("resolution") // e.g. "1080p", "720x1280"
+  duration   Float?  @map("duration") // seconds, supports 5 / 6 / 10 / fractional
+  aspect     String? @map("aspect") // e.g. "16:9", "9:16", "1:1"
+
+  modelId       String      @map("model_id")
+  model         Model       @relation(fields: [modelId], references: [id])
+  promptSuiteId String      @map("prompt_suite_id")
+  promptSuite   PromptSuite @relation(fields: [promptSuiteId], references: [id])
+  imageSetId    String?     @map("image_set_id")
+  imageSet      ImageSet?   @relation(fields: [imageSetId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  videoAssets        VideoAsset[]
+  evaluationPackages EvaluationPackage[] @relation("PackageDatasets")
+
+  @@unique([modelId, promptSuiteId, imageSetId])
+  @@index([taskType])
+  @@map("datasets")
+}
+
+// ─── ImageSet (I2V 起始帧集合) ────────────────────────
+
+model ImageSet {
+  id             String   @id @default(uuid())
+  name           String   @unique
+  imageOssPrefix String   @map("image_oss_prefix")
+  imageCount     Int      @map("image_count")
+  generatedAt    DateTime @default(now()) @map("generated_at")
+
+  promptSuiteId String      @map("prompt_suite_id")
+  promptSuite   PromptSuite @relation(fields: [promptSuiteId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  images   Image[]
+  datasets Dataset[]
+
+  @@map("image_sets")
+}
+
+model Image {
+  id        String    @id @default(uuid())
+  ossKey    String    @map("oss_key")
+  signedUrl String?   @map("signed_url")
+  expiresAt DateTime? @map("expires_at")
+
+  imageSetId String   @map("image_set_id")
+  imageSet   ImageSet @relation(fields: [imageSetId], references: [id], onDelete: Cascade)
+  promptId   String   @map("prompt_id")
+  prompt     Prompt   @relation(fields: [promptId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([imageSetId, promptId])
+  @@index([imageSetId])
+  @@map("images")
 }
